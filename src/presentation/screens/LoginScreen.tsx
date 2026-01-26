@@ -88,9 +88,9 @@ export const LoginScreen = () => {
                         />
                     </View>
 
-                    <Text style={styles.title}>Rachadinha<Text style={{ fontSize: 16 }}>®</Text></Text>
 
-                    <Text style={styles.welcomeText}>Bem-vindo!</Text>
+
+
                 </Animated.View>
 
                 <Animated.View entering={FadeInUp.delay(400).duration(800)} style={styles.formContainer}>
@@ -142,7 +142,7 @@ export const LoginScreen = () => {
 
                     <TouchableOpacity onPress={() => setIsLogin(!isLogin)} style={styles.footerButton}>
                         <Text style={styles.footerText}>
-                            {isLogin ? 'Esqueceu senha?' : 'Já possui conta?'}
+                            {isLogin ? 'Criar conta' : 'Já possui conta? Entrar'}
                         </Text>
                     </TouchableOpacity>
                 </Animated.View>
