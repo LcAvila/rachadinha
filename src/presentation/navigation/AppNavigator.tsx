@@ -14,6 +14,7 @@ import { AddItemsScreen } from '../screens/AddItemsScreen';
 import { PendingExpensesScreen } from '../screens/PendingExpensesScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { CreateGroupScreen } from '../screens/CreateGroupScreen';
+import { NotificationsScreen } from '../screens/NotificationsScreen';
 
 import { NotificationRepository } from '../../infrastructure/firebase/NotificationRepository';
 import { AuthRepository } from '../../infrastructure/firebase/AuthRepository';
@@ -85,7 +86,7 @@ export const AppNavigator = () => {
     }
 
     return (
-        <NavigationContainer>
+        <NavigationContainer documentTitle={{ formatter: () => 'Rachadinha' }}>
             <Stack.Navigator screenOptions={screenOptions}>
                 {!isAuthenticated ? (
                     <Stack.Screen
@@ -120,6 +121,10 @@ export const AppNavigator = () => {
                         <Stack.Screen
                             name="Profile"
                             component={ProfileScreen}
+                        />
+                        <Stack.Screen
+                            name="Notifications"
+                            component={NotificationsScreen}
                         />
                     </>
                 )}

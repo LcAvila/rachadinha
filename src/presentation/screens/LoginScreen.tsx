@@ -9,7 +9,8 @@ import {
     Alert,
     KeyboardAvoidingView,
     Platform,
-    Image
+    Image,
+    ScrollView
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -77,84 +78,85 @@ export const LoginScreen = () => {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.container}
         >
-            <View style={styles.content}>
-                <Animated.View entering={FadeInUp.delay(200).duration(800)} style={styles.header}>
-                    {/* Logo Image */}
-                    <View style={styles.logoContainer}>
-                        <Image
-                            source={require('../../../assets/logo.png')}
-                            style={styles.logoImage}
-                            resizeMode="contain"
-                        />
-                    </View>
+            <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
+                <View style={styles.content}>
+                    <Animated.View entering={FadeInUp.delay(200).duration(800)} style={styles.header}>
+                        {/* Logo Image */}
+                        <View style={styles.logoContainer}>
+                            <Image
+                                source={require('../../../assets/logo.png')}
+                                style={styles.logoImage}
+                                resizeMode="contain"
+                            />
+                        </View>
 
 
 
 
-                </Animated.View>
+                    </Animated.View>
 
-                <Animated.View entering={FadeInUp.delay(400).duration(800)} style={styles.formContainer}>
-                    {!isLogin && (
+                    <Animated.View entering={FadeInUp.delay(400).duration(800)} style={styles.formContainer}>
+                        {!isLogin && (
+                            <View style={styles.inputContainer}>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Nome"
+                                    placeholderTextColor={COLORS.textSecondary}
+                                    value={name}
+                                    onChangeText={setName}
+                                />
+                            </View>
+                        )}
+
                         <View style={styles.inputContainer}>
                             <TextInput
                                 style={styles.input}
-                                placeholder="Nome"
+                                placeholder="Email"
                                 placeholderTextColor={COLORS.textSecondary}
-                                value={name}
-                                onChangeText={setName}
+                                value={email}
+                                onChangeText={setEmail}
+                                autoCapitalize="none"
+                                keyboardType="email-address"
                             />
                         </View>
-                    )}
 
-                    <View style={styles.inputContainer}>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Email"
-                            placeholderTextColor={COLORS.textSecondary}
-                            value={email}
-                            onChangeText={setEmail}
-                            autoCapitalize="none"
-                            keyboardType="email-address"
-                        />
-                    </View>
+                        <View style={styles.inputContainer}>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Senha"
+                                placeholderTextColor={COLORS.textSecondary}
+                                value={password}
+                                onChangeText={setPassword}
+                                secureTextEntry={!showPassword}
+                            />
+                            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
+                                <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={COLORS.textSecondary} />
+                            </TouchableOpacity>
+                        </View>
 
-                    <View style={styles.inputContainer}>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Senha"
-                            placeholderTextColor={COLORS.textSecondary}
-                            value={password}
-                            onChangeText={setPassword}
-                            secureTextEntry={!showPassword}
+                        <AnimatedButton
+                            variant="primary"
+                            title={isLogin ? 'Entrar' : 'Cadastrar'}
+                            onPress={handleAuth}
+                            loading={loading}
+                            disabled={loading}
                         />
-                        <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
-                            <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={COLORS.textSecondary} />
+
+                        <TouchableOpacity onPress={() => setIsLogin(!isLogin)} style={styles.footerButton}>
+                            <Text style={styles.footerText}>
+                                {isLogin ? 'Criar conta' : 'Já possui conta? Entrar'}
+                            </Text>
                         </TouchableOpacity>
+                    </Animated.View>
+
+                    {/* Social Placeholder */}
+                    <View style={styles.socialContainer}>
+                        <Ionicons name="logo-google" size={24} color="#9CA3AF" style={styles.socialIcon} />
+                        <Ionicons name="logo-facebook" size={24} color="#9CA3AF" style={styles.socialIcon} />
+                        <Ionicons name="logo-apple" size={24} color="#9CA3AF" style={styles.socialIcon} />
                     </View>
-
-                    <AnimatedButton
-                        variant="primary"
-                        title={isLogin ? 'Entrar' : 'Cadastrar'}
-                        onPress={handleAuth}
-                        loading={loading}
-                        disabled={loading}
-                    />
-
-                    <TouchableOpacity onPress={() => setIsLogin(!isLogin)} style={styles.footerButton}>
-                        <Text style={styles.footerText}>
-                            {isLogin ? 'Criar conta' : 'Já possui conta? Entrar'}
-                        </Text>
-                    </TouchableOpacity>
-                </Animated.View>
-
-                {/* Social Placeholder */}
-                <View style={styles.socialContainer}>
-                    <Ionicons name="logo-google" size={24} color="#9CA3AF" style={styles.socialIcon} />
-                    <Ionicons name="logo-facebook" size={24} color="#9CA3AF" style={styles.socialIcon} />
-                    <Ionicons name="logo-apple" size={24} color="#9CA3AF" style={styles.socialIcon} />
                 </View>
-            </View>
-
+            </ScrollView>
             <Toast
                 visible={toast.visible}
                 message={toast.message}

@@ -16,4 +16,5 @@ export interface Expense {
     finalizedAt?: Date;
     createdAt: Date;
     items: ExpenseItem[];
+    involvedUserIds: string[];
 }

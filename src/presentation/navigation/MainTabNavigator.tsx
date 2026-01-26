@@ -1,6 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { HomeScreen } from '../screens/HomeScreen';
+import { FinancialScreen } from '../screens/FinancialScreen';
 import { COLORS } from '../../core/constants/constants';
 import { Ionicons } from '@expo/vector-icons';
 import { View, StyleSheet } from 'react-native';

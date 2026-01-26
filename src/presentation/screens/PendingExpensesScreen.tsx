@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, SafeAreaView } from 'react-native';
 import { ExpenseRepository } from '../../infrastructure/firebase/ExpenseRepository';
 import { AuthRepository } from '../../infrastructure/firebase/AuthRepository';
@@ -12,6 +12,7 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { Expense } from '../../domain/entities/Expense';
+import { Celebration, CelebrationHandle } from '../components/Celebration';
 
 type PendingExpensesNavProp = StackNavigationProp<RootStackParamList, 'PendingExpenses'>;
 
@@ -24,6 +25,7 @@ export const PendingExpensesScreen = () => {
     const [loading, setLoading] = useState(true);
     const [isConfirmVisible, setIsConfirmVisible] = useState(false);
     const [selectedPayment, setSelectedPayment] = useState<string | null>(null);
+    const celebrationRef = useRef<CelebrationHandle>(null);
 
     const expenseRepo = new ExpenseRepository();
     const authRepo = new AuthRepository();
@@ -64,6 +66,7 @@ export const PendingExpensesScreen = () => {
             await expenseRepo.markPaymentAsPaid(selectedPayment);
             setIsConfirmVisible(false);
             setSelectedPayment(null);
+            celebrationRef.current?.start();
             loadData(); // Reload list
         } catch (e) {
             console.error(e);
@@ -182,6 +185,7 @@ export const PendingExpensesScreen = () => {
                 onConfirm={handleMarkAsPaid}
                 onCancel={() => setIsConfirmVisible(false)}
             />
+            <Celebration ref={celebrationRef} />
         </SafeAreaView>
     );
 };

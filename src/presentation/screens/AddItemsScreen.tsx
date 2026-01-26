@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator, TouchableOpacity, Platform, Image, Modal } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming, Easing, runOnJS, interpolate, Extrapolate, createAnimatedPropAdapter, processColor } from 'react-native-reanimated';
+import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator, TouchableOpacity, Platform, Image, Modal, KeyboardAvoidingView } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
@@ -18,6 +19,7 @@ import { StatusModal } from '../components/StatusModal';
 import { StatusBadge } from '../components/StatusBadge';
 import { Ionicons } from '@expo/vector-icons';
 import { Toast } from '../components/Toast';
+import { Celebration, CelebrationHandle } from '../components/Celebration';
 
 type AddItemsScreenRouteProp = RouteProp<RootStackParamList, 'AddItems'>;
 type AddItemsScreenNavProp = StackNavigationProp<RootStackParamList, 'AddItems'>;
@@ -37,7 +39,37 @@ export const AddItemsScreen = () => {
     const [isPaidConfirmVisible, setIsPaidConfirmVisible] = useState(false);
     const [pendingStatus, setPendingStatus] = useState<ExpenseStatus | null>(null);
     const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+
     const [toast, setToast] = useState({ visible: false, message: '', type: 'info' as 'success' | 'error' | 'info' });
+    const celebrationRef = useRef<CelebrationHandle>(null);
+    const summaryProgress = useSharedValue(1); // 1 = fully open, 0 = fully closed
+    const [isSummaryCollapsed, setIsSummaryCollapsed] = useState(false);
+
+    const toggleSummary = () => {
+        const nextState = !isSummaryCollapsed;
+        setIsSummaryCollapsed(nextState);
+
+        // Slingshot physics
+        summaryProgress.value = withSpring(nextState ? 0 : 1, {
+            damping: 10,
+            stiffness: 100,
+            mass: 0.5,
+            overshootClamping: false // Allows the "boing"
+        });
+    };
+
+    const summaryContentStyle = useAnimatedStyle(() => {
+        return {
+            maxHeight: interpolate(summaryProgress.value, [0, 1], [0, 500]), // Approximate max height
+            opacity: interpolate(summaryProgress.value, [0, 0.5, 1], [0, 0, 1]),
+            transform: [
+                { scaleY: summaryProgress.value },
+                { translateY: interpolate(summaryProgress.value, [0, 1], [-100, 0]) }
+            ],
+            marginBottom: interpolate(summaryProgress.value, [0, 1], [0, 16]),
+            overflow: 'hidden'
+        };
+    }, []);
 
     const expenseRepo = new ExpenseRepository();
     const notifRepo = new NotificationRepository();
@@ -115,6 +147,7 @@ export const AddItemsScreen = () => {
         try {
             await finalizeUseCase.execute(expenseId);
             setToast({ visible: true, message: 'Despesa finalizada com sucesso! 🚀', type: 'success' });
+            celebrationRef.current?.start();
             setTimeout(() => {
                 navigation.navigate('Home');
             }, 1500);
@@ -138,6 +171,9 @@ export const AddItemsScreen = () => {
     const updateStatus = async (status: ExpenseStatus) => {
         try {
             await expenseRepo.updateExpense(expenseId, { status });
+            if (status === 'paid') {
+                celebrationRef.current?.start();
+            }
             loadData();
         } catch (e) {
             Alert.alert('Erro', 'Falha ao atualizar status');
@@ -154,136 +190,168 @@ export const AddItemsScreen = () => {
 
     const isPaid = expense.status === 'paid';
 
+    // Calculate total dynamically to avoid stale state
+    const itemsTotal = expense.items ? expense.items.reduce((acc, item) => acc + item.amount, 0) : 0;
+    const currentTotal = itemsTotal + expense.deliveryFee + expense.serviceFee - expense.discount;
+
     return (
-        <ScrollView contentContainerStyle={styles.container}>
-            <View style={styles.headerRow}>
-                <Text style={styles.title}>{expense.title}</Text>
-                <TouchableOpacity onPress={() => !isPaid && setIsStatusModalVisible(true)} disabled={isPaid}>
-                    <StatusBadge status={expense.status} />
-                </TouchableOpacity>
-            </View>
-
-            {isPaid && (
-                <View style={styles.paidHeader}>
-                    <Ionicons name="checkmark-done-circle" size={24} color={COLORS.success} />
-                    <Text style={styles.paidHeaderText}>Esta despesa foi FINALIZADA</Text>
-                </View>
-            )}
-
-            <View style={styles.summaryBox}>
-                <View style={styles.summaryHeader}>
-                    <Ionicons name="receipt-outline" size={20} color={COLORS.primary} />
-                    <Text style={styles.summaryTitle}>Resumo da Conta</Text>
-                </View>
-                <View style={styles.summaryContent}>
-                    <View style={styles.summaryItem}>
-                        <Text style={styles.summaryLabel}>Itens ({expense.items ? expense.items.length : 0})</Text>
-                        <Text style={styles.summaryValue}>{formatCurrency(expense.items ? expense.items.reduce((a, b) => a + b.amount, 0) : 0)}</Text>
-                    </View>
-                    <View style={styles.summaryItem}>
-                        <Text style={styles.summaryLabel}>Taxas & Entrega</Text>
-                        <Text style={styles.summaryValue}>+ {formatCurrency(expense.deliveryFee + expense.serviceFee)}</Text>
-                    </View>
-                    <View style={styles.summaryItem}>
-                        <Text style={styles.summaryLabel}>Descontos</Text>
-                        <Text style={[styles.summaryValue, { color: COLORS.success }]}>- {formatCurrency(expense.discount)}</Text>
-                    </View>
-                    <View style={[styles.summaryItem, styles.totalRow]}>
-                        <Text style={styles.totalLabel}>Total Geral</Text>
-                        <Text style={styles.totalValue}>{formatCurrency(expense.totalAmount || 0)}</Text>
-                    </View>
-
-                    {expense.invoiceUrl && (
-                        <TouchableOpacity style={styles.viewInvoiceBtn} onPress={() => setShowInvoiceModal(true)}>
-                            <Ionicons name="image-outline" size={18} color={COLORS.primary} />
-                            <Text style={styles.viewInvoiceText}>Ver Nota Fiscal</Text>
+        <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                style={{ flex: 1 }}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+            >
+                <ScrollView contentContainerStyle={styles.container} style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+                    <View style={styles.headerRow}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                            <TouchableOpacity onPress={() => navigation.navigate('Home')}>
+                                <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+                            </TouchableOpacity>
+                            <Text style={[styles.title, { flex: 1 }]} numberOfLines={1}>{expense.title}</Text>
+                        </View>
+                        <TouchableOpacity onPress={() => !isPaid && setIsStatusModalVisible(true)} disabled={isPaid}>
+                            <StatusBadge status={expense.status} />
                         </TouchableOpacity>
+                    </View>
+
+                    {isPaid && (
+                        <View style={styles.paidHeader}>
+                            <Ionicons name="checkmark-done-circle" size={24} color={COLORS.success} />
+                            <Text style={styles.paidHeaderText}>Esta despesa foi FINALIZADA</Text>
+                        </View>
                     )}
-                </View>
-            </View>
 
-            {!isPaid && <ItemInput users={users} onAdd={handleAddItem} />}
-
-            <View style={styles.sectionHeader}>
-                <Ionicons name="people-outline" size={20} color={COLORS.text} />
-                <Text style={styles.sectionTitle}>Divisão do Valor</Text>
-            </View>
-            <View style={styles.calculationsList}>
-                {calculations.map((calc) => (
-                    <View key={calc.userId} style={styles.calcRow}>
-                        <View style={styles.calcLeft}>
-                            <View style={styles.userAvatar}>
-                                <Text style={styles.avatarText}>{calc.userName.charAt(0)}</Text>
-                            </View>
-                            <View>
-                                <Text style={styles.userName}>{calc.userName}</Text>
-                                <Text style={styles.userDetail}>{calc.percentage.toFixed(0)}% da conta</Text>
-                            </View>
-                        </View>
-                        <Text style={styles.amount}>{formatCurrency(calc.finalAmount)}</Text>
-                    </View>
-                ))}
-            </View>
-
-            <View style={styles.itemsList}>
-                <View style={styles.sectionHeader}>
-                    <Ionicons name="list-outline" size={20} color={COLORS.text} />
-                    <Text style={styles.sectionTitle}>Itens Individuais</Text>
-                </View>
-                {expense.items && expense.items.map((item, index) => (
-                    <View key={index} style={styles.itemRow}>
-                        <View style={styles.itemInfo}>
-                            <Text style={styles.itemDesc}>{item.description}</Text>
-                            <Text style={styles.itemUser}>por {item.userName}</Text>
-                        </View>
-                        <Text style={styles.itemAmount}>{formatCurrency(item.amount)}</Text>
-                    </View>
-                ))}
-            </View>
-
-            {!isPaid && (
-                <View style={styles.buttonRow}>
-                    <TouchableOpacity
-                        style={[styles.actionButton, styles.saveButton]}
-                        onPress={() => navigation.navigate('Home')}
-                        disabled={finalizing}
-                    >
-                        <Text style={[styles.buttonText, styles.saveButtonText]}>Voltar</Text>
-                    </TouchableOpacity>
-
-                    {expense.status === 'draft' && (
+                    <View style={[styles.summaryBox, { overflow: 'hidden' }]}>
                         <TouchableOpacity
-                            style={[styles.actionButton, styles.finalizeButton, { opacity: finalizing ? 0.7 : 1 }]}
-                            onPress={handleFinalize}
-                            disabled={finalizing}
+                            style={styles.summaryHeader}
+                            onPress={toggleSummary}
+                            activeOpacity={0.7}
                         >
-                            {finalizing ? (
-                                <ActivityIndicator color='#FFF' />
-                            ) : (
-                                <Text style={styles.buttonText}>Finalizar</Text>
-                            )}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <Ionicons name="receipt-outline" size={20} color={COLORS.primary} />
+                                <Text style={styles.summaryTitle}>Resumo da Conta</Text>
+                            </View>
+                            <Ionicons
+                                name={isSummaryCollapsed ? "chevron-down" : "chevron-up"}
+                                size={20}
+                                color={COLORS.textSecondary}
+                            />
                         </TouchableOpacity>
+
+                        <Animated.View style={summaryContentStyle}>
+                            <View style={styles.summaryContent}>
+                                <View style={styles.summaryItem}>
+                                    <Text style={styles.summaryLabel}>Itens ({expense.items ? expense.items.length : 0})</Text>
+                                    <Text style={styles.summaryValue}>{formatCurrency(expense.items ? expense.items.reduce((a, b) => a + b.amount, 0) : 0)}</Text>
+                                </View>
+                                <View style={styles.summaryItem}>
+                                    <Text style={styles.summaryLabel}>Taxas & Entrega</Text>
+                                    <Text style={styles.summaryValue}>+ {formatCurrency(expense.deliveryFee + expense.serviceFee)}</Text>
+                                </View>
+                                <View style={styles.summaryItem}>
+                                    <Text style={styles.summaryLabel}>Descontos</Text>
+                                    <Text style={[styles.summaryValue, { color: COLORS.success }]}>- {formatCurrency(expense.discount)}</Text>
+                                </View>
+                                <View style={[styles.summaryItem, styles.totalRow]}>
+                                    <Text style={styles.totalLabel}>Total Geral</Text>
+                                    <Text style={styles.totalValue}>{formatCurrency(currentTotal)}</Text>
+                                </View>
+
+                                {expense.invoiceUrl && (
+                                    <TouchableOpacity style={styles.viewInvoiceBtn} onPress={() => setShowInvoiceModal(true)}>
+                                        <Ionicons name="image-outline" size={18} color={COLORS.primary} />
+                                        <Text style={styles.viewInvoiceText}>Ver Nota Fiscal</Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        </Animated.View>
+                    </View>
+
+                    {!isPaid && <ItemInput users={users} onAdd={handleAddItem} />}
+
+                    <View style={styles.sectionHeader}>
+                        <Ionicons name="people-outline" size={20} color={COLORS.text} />
+                        <Text style={styles.sectionTitle}>Divisão do Valor</Text>
+                    </View>
+                    <View style={styles.calculationsList}>
+                        {calculations.map((calc) => (
+                            <View key={calc.userId} style={styles.calcRow}>
+                                <View style={styles.calcLeft}>
+                                    <View style={styles.userAvatar}>
+                                        <Text style={styles.avatarText}>{calc.userName.charAt(0)}</Text>
+                                    </View>
+                                    <View>
+                                        <Text style={styles.userName}>{calc.userName}</Text>
+                                        <Text style={styles.userDetail}>{calc.percentage.toFixed(0)}% da conta</Text>
+                                    </View>
+                                </View>
+                                <Text style={styles.amount}>{formatCurrency(calc.finalAmount)}</Text>
+                            </View>
+                        ))}
+                    </View>
+
+                    <View style={styles.itemsList}>
+                        <View style={styles.sectionHeader}>
+                            <Ionicons name="list-outline" size={20} color={COLORS.text} />
+                            <Text style={styles.sectionTitle}>Itens Individuais</Text>
+                        </View>
+                        {expense.items && expense.items.map((item, index) => (
+                            <View key={index} style={styles.itemRow}>
+                                <View style={styles.itemInfo}>
+                                    <Text style={styles.itemDesc}>{item.description}</Text>
+                                    <Text style={styles.itemUser}>por {item.userName}</Text>
+                                </View>
+                                <Text style={styles.itemAmount}>{formatCurrency(item.amount)}</Text>
+                            </View>
+                        ))}
+                    </View>
+
+                    {!isPaid && (
+                        <View style={styles.buttonRow}>
+                            <TouchableOpacity
+                                style={[styles.actionButton, styles.saveButton]}
+                                onPress={() => navigation.navigate('Home')}
+                                disabled={finalizing}
+                            >
+                                <Text style={[styles.buttonText, styles.saveButtonText]}>Voltar</Text>
+                            </TouchableOpacity>
+
+                            {expense.status === 'draft' && (
+                                <TouchableOpacity
+                                    style={[styles.actionButton, styles.finalizeButton, { opacity: finalizing ? 0.7 : 1 }]}
+                                    onPress={handleFinalize}
+                                    disabled={finalizing}
+                                >
+                                    {finalizing ? (
+                                        <ActivityIndicator color='#FFF' />
+                                    ) : (
+                                        <Text style={styles.buttonText}>Finalizar</Text>
+                                    )}
+                                </TouchableOpacity>
+                            )}
+
+                            <TouchableOpacity
+                                style={[styles.actionButton, styles.saveButton]}
+                                onPress={() => setIsStatusModalVisible(true)}
+                            >
+                                <Text style={[styles.buttonText, styles.saveButtonText]}>Mudar Status</Text>
+                            </TouchableOpacity>
+                        </View>
                     )}
 
-                    <TouchableOpacity
-                        style={[styles.actionButton, styles.saveButton]}
-                        onPress={() => setIsStatusModalVisible(true)}
-                    >
-                        <Text style={[styles.buttonText, styles.saveButtonText]}>Mudar Status</Text>
-                    </TouchableOpacity>
-                </View>
-            )}
+                    {isPaid && (
+                        <View style={styles.buttonRow}>
+                            <TouchableOpacity
+                                style={[styles.actionButton, styles.finalizeButton]}
+                                onPress={() => navigation.navigate('Home')}
+                            >
+                                <Text style={styles.buttonText}>Voltar para Home</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
 
-            {isPaid && (
-                <View style={styles.buttonRow}>
-                    <TouchableOpacity
-                        style={[styles.actionButton, styles.finalizeButton]}
-                        onPress={() => navigation.navigate('Home')}
-                    >
-                        <Text style={styles.buttonText}>Voltar para Home</Text>
-                    </TouchableOpacity>
-                </View>
-            )}
+                </ScrollView >
+            </KeyboardAvoidingView>
 
             <CustomConfirmModal
                 visible={isConfirmModalVisible}
@@ -345,7 +413,8 @@ export const AddItemsScreen = () => {
                 type={toast.type}
                 onHide={() => setToast({ ...toast, visible: false })}
             />
-        </ScrollView >
+            <Celebration ref={celebrationRef} />
+        </View>
     );
 };
 
@@ -373,8 +442,9 @@ const styles = StyleSheet.create({
     summaryHeader: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'space-between', // Changed to expand
         marginBottom: 16,
-        gap: 8,
+        // gap: 8, // handled by inner view
     },
     summaryTitle: {
         fontSize: 14,

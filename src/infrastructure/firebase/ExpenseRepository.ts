@@ -22,8 +22,12 @@ import { FIREBASE_COLLECTIONS } from '../../core/constants/constants';
 
 export class ExpenseRepository implements IExpenseRepository {
     async createExpense(expense: Omit<Expense, 'id'>): Promise<Expense> {
-        const docRef = await addDoc(collection(db, FIREBASE_COLLECTIONS.EXPENSES), expense);
-        return { ...expense, id: docRef.id };
+        const expenseWithInvolved = {
+            ...expense,
+            involvedUserIds: [expense.createdBy]
+        };
+        const docRef = await addDoc(collection(db, FIREBASE_COLLECTIONS.EXPENSES), expenseWithInvolved);
+        return { ...expenseWithInvolved, id: docRef.id };
     }
 
     async getExpense(id: string): Promise<Expense | null> {
@@ -37,6 +41,7 @@ export class ExpenseRepository implements IExpenseRepository {
                 id: docSnap.id,
                 ...data,
                 items: data.items || [],
+                involvedUserIds: data.involvedUserIds || [],
                 createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt),
                 finalizedAt: data.finalizedAt instanceof Timestamp ? data.finalizedAt.toDate() : data.finalizedAt ? new Date(data.finalizedAt) : undefined
             } as Expense;
@@ -53,6 +58,7 @@ export class ExpenseRepository implements IExpenseRepository {
         const docRef = doc(db, FIREBASE_COLLECTIONS.EXPENSES, expenseId);
         await updateDoc(docRef, {
             items: arrayUnion(item),
+            involvedUserIds: arrayUnion(item.userId),
             totalAmount: increment(item.amount)
         });
     }
@@ -72,8 +78,7 @@ export class ExpenseRepository implements IExpenseRepository {
         // Let's implement fetching expenses created by the user for now.
         const q = query(
             collection(db, FIREBASE_COLLECTIONS.EXPENSES),
-            where('createdBy', '==', userId)
-            // orderBy('createdAt', 'desc') // Removed to avoid index requirement for now
+            where('involvedUserIds', 'array-contains', userId)
         );
 
         const querySnapshot = await getDocs(q);

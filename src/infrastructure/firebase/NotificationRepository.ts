@@ -1,8 +1,13 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { INotificationRepository } from '../../domain/repositories/INotificationRepository';
+import { db } from './config';
+import { collection, query, where, orderBy, getDocs, updateDoc, doc, addDoc, Timestamp } from 'firebase/firestore';
+import { Notification } from '../../domain/entities/Notification';
 
 export class NotificationRepository implements INotificationRepository {
+    private collectionName = 'notifications';
+
     async registerForPushNotifications(): Promise<string | null> {
         let token: string | undefined;
 
@@ -78,6 +83,42 @@ export class NotificationRepository implements INotificationRepository {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify(messages),
+        });
+    }
+
+    // New methods for in-app notifications
+    async getUserNotifications(userId: string): Promise<Notification[]> {
+        const q = query(
+            collection(db, this.collectionName),
+            where('userId', '==', userId),
+            orderBy('createdAt', 'desc')
+        );
+
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                userId: data.userId,
+                title: data.title,
+                message: data.message,
+                read: data.read,
+                type: data.type,
+                createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt),
+                data: data.data
+            };
+        });
+    }
+
+    async markAsRead(notificationId: string): Promise<void> {
+        const docRef = doc(db, this.collectionName, notificationId);
+        await updateDoc(docRef, { read: true });
+    }
+
+    async createNotification(notification: Omit<Notification, 'id'>): Promise<void> {
+        await addDoc(collection(db, this.collectionName), {
+            ...notification,
+            createdAt: Timestamp.fromDate(notification.createdAt),
         });
     }
 }

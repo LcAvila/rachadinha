@@ -49,6 +49,19 @@ export class FinalizeExpenseUseCase {
 
             // Preparar notificação
             const userToNotify = allUsers.find(u => u.id === calc.userId);
+
+            // 2.1 Criar notificação persistente no app
+            await this.notificationRepository.createNotification({
+                userId: calc.userId,
+                title: 'Nova Despesa Finalizada',
+                message: `${expense.createdByName} incluiu você na despesa "${expense.title}". Valor: ${formatCurrency(calc.finalAmount)}.`,
+                read: false,
+                type: 'expense_invite', // or 'payment_request'
+                createdAt: new Date(),
+                data: { expenseId: expense.id }
+            });
+
+            // 2.2 Preparar Push Notification
             if (userToNotify?.pushToken) {
                 notificationsToSend.push({
                     pushToken: userToNotify.pushToken,

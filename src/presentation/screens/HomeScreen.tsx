@@ -12,6 +12,7 @@ import { formatCurrency } from '../../core/utils/formatCurrency';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, FadeInDown } from 'react-native-reanimated';
 import { StatusBadge } from '../components/StatusBadge';
+import { Dashboard } from '../components/Dashboard';
 
 type HomeScreenProp = StackNavigationProp<RootStackParamList, 'Home'>;
 
@@ -21,10 +22,12 @@ export const HomeScreen = () => {
     // @ts-ignore - route params might be undefined if accessed directly, but TabNavigator sets them.
     const filterStatus: ExpenseStatus = route.params?.filterStatus || 'draft';
 
-    const [expenses, setExpenses] = useState<Expense[]>([]);
+    const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
+    const [filteredExpenses, setFilteredExpenses] = useState<Expense[]>([]);
     const [loading, setLoading] = useState(true);
     const [pendingStats, setPendingStats] = useState({ toReceive: 0, toPay: 0 });
     const [menuOpen, setMenuOpen] = useState(false);
+    const [userName, setUserName] = useState('');
 
     const expenseRepo = new ExpenseRepository();
     const authRepo = new AuthRepository();
@@ -35,11 +38,15 @@ export const HomeScreen = () => {
             setLoading(true);
             const user = await authRepo.getCurrentUser();
             if (!user) return;
+            setUserName(user.nickname || user.name.split(' ')[0]);
 
             // Fetch expenses and filter
+            // Fetch expenses and filter
             const fetchedExpenses = await expenseRepo.getUserExpenses(user.id);
+            setAllExpenses(fetchedExpenses);
+
             const filtered = fetchedExpenses.filter(e => e.status === filterStatus);
-            setExpenses(filtered);
+            setFilteredExpenses(filtered);
 
             // Fetch stats
             const { toReceive, toPay } = await pendingUseCase.execute(user.id);
@@ -82,40 +89,45 @@ export const HomeScreen = () => {
         }
     };
 
-    const renderExpenseItem = ({ item, index }: { item: Expense; index: number }) => (
-        <Animated.View entering={FadeInDown.delay(index * 100).springify()}>
-            <TouchableOpacity
-                style={styles.expenseCard}
-                onPress={() => {
-                    navigation.navigate('AddItems', { expenseId: item.id });
-                }}
-                activeOpacity={0.7}
-            >
-                <View style={[styles.cardIcon, { backgroundColor: getStatusColor(item.status) + '15' }]}>
-                    <Ionicons
-                        name={item.status === 'draft' ? "document-text-outline" : item.status === 'paid' ? "checkmark-done-circle" : "hourglass-outline"}
-                        size={26}
-                        color={getStatusColor(item.status)}
-                    />
-                </View>
-                <View style={styles.cardInfo}>
-                    <Text style={styles.cardTitle}>{item.title}</Text>
-                    <View style={styles.cardStatusRow}>
-                        <View style={styles.cardDetails}>
-                            <Text style={styles.cardAmount}>
-                                {formatCurrency(item.totalAmount || 0)}
-                            </Text>
-                            <Text style={styles.cardItemCount}>{item.items?.length || 0} itens</Text>
-                        </View>
-                        <StatusBadge status={item.status} />
+    const renderExpenseItem = ({ item, index }: { item: Expense; index: number }) => {
+        const itemsTotal = item.items ? item.items.reduce((acc, i) => acc + i.amount, 0) : 0;
+        const currentTotal = itemsTotal + (item.deliveryFee || 0) + (item.serviceFee || 0) - (item.discount || 0);
+
+        return (
+            <Animated.View entering={FadeInDown.delay(index * 100).springify()}>
+                <TouchableOpacity
+                    style={styles.expenseCard}
+                    onPress={() => {
+                        navigation.navigate('AddItems', { expenseId: item.id });
+                    }}
+                    activeOpacity={0.7}
+                >
+                    <View style={[styles.cardIcon, { backgroundColor: getStatusColor(item.status) + '15' }]}>
+                        <Ionicons
+                            name={item.status === 'draft' ? "document-text-outline" : item.status === 'paid' ? "checkmark-done-circle" : "hourglass-outline"}
+                            size={26}
+                            color={getStatusColor(item.status)}
+                        />
                     </View>
-                </View>
-                <View style={styles.cardArrow}>
-                    <Ionicons name="chevron-forward" size={20} color="#CBD5E0" />
-                </View>
-            </TouchableOpacity>
-        </Animated.View>
-    );
+                    <View style={styles.cardInfo}>
+                        <Text style={styles.cardTitle}>{item.title}</Text>
+                        <View style={styles.cardStatusRow}>
+                            <View style={styles.cardDetails}>
+                                <Text style={styles.cardAmount}>
+                                    {formatCurrency(currentTotal)}
+                                </Text>
+                                <Text style={styles.cardItemCount}>{item.items?.length || 0} itens</Text>
+                            </View>
+                            <StatusBadge status={item.status} />
+                        </View>
+                    </View>
+                    <View style={styles.cardArrow}>
+                        <Ionicons name="chevron-forward" size={20} color="#CBD5E0" />
+                    </View>
+                </TouchableOpacity>
+            </Animated.View>
+        );
+    };
 
     return (
         <View style={styles.container}>
@@ -124,42 +136,28 @@ export const HomeScreen = () => {
             <View style={styles.header}>
                 <Text style={styles.headerTitle}>Rachadinha</Text>
                 <View style={styles.headerActions}>
-                    <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
+                    <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={{ color: '#FFF', fontWeight: 'bold', fontSize: 14 }}>{userName}</Text>
                         <Ionicons name="person-circle-outline" size={28} color="#FFF" />
                     </TouchableOpacity>
-                    <TouchableOpacity style={{ marginLeft: 16 }}>
+                    <TouchableOpacity style={{ marginLeft: 16 }} onPress={() => navigation.navigate('Notifications')}>
                         <Ionicons name="notifications-outline" size={26} color="#FFF" />
                     </TouchableOpacity>
                 </View>
             </View>
 
             <View style={styles.content}>
-                <TouchableOpacity
-                    style={styles.saldoCard}
-                    onPress={() => navigation.navigate('PendingExpenses')}
-                    activeOpacity={0.9}
-                >
-                    <View style={styles.saldoHeader}>
-                        <Text style={styles.saldoLabel}>Saldo Geral</Text>
-                        <Ionicons name="stats-chart" size={18} color={COLORS.primary} />
-                    </View>
-                    <Text style={styles.saldoSubLabel}>Você deve</Text>
-                    <Text style={styles.saldoValue}>{formatCurrency(pendingStats.toPay)}</Text>
-                    {pendingStats.toReceive > 0 && (
-                        <Text style={[styles.saldoSubLabel, { color: COLORS.success, marginTop: 8 }]}>
-                            e tem a receber <Text style={{ fontWeight: 'bold' }}>{formatCurrency(pendingStats.toReceive)}</Text>
-                        </Text>
-                    )}
-                    <View style={styles.saldoFooter}>
-                        <Text style={styles.saldoFooterText}>Ver detalhes</Text>
-                        <Ionicons name="arrow-forward" size={14} color={COLORS.primary} />
-                    </View>
-                </TouchableOpacity>
+                <Dashboard
+                    toPay={pendingStats.toPay}
+                    toReceive={pendingStats.toReceive}
+                    expenses={allExpenses}
+                    onPress={() => navigation.navigate('Home', { screen: 'Financial' })}
+                />
 
                 <Text style={styles.sectionTitle}>Minhas Despesas</Text>
 
                 <FlatList
-                    data={expenses}
+                    data={filteredExpenses}
                     keyExtractor={item => item.id}
                     renderItem={renderExpenseItem}
                     contentContainerStyle={{ paddingBottom: 100 }}

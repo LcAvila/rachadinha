@@ -7,16 +7,41 @@ import { CreateGroupUseCase } from '../../application/usecases/groups/CreateGrou
 import { COLORS } from '../../core/constants/constants';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { EmojiPickerModal } from '../components/EmojiPickerModal';
+import { Toast } from '../components/Toast';
+import { FlatList } from 'react-native-gesture-handler';
 
 export const CreateGroupScreen = () => {
     const navigation = useNavigation();
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [loading, setLoading] = useState(false);
+    const [emoji, setEmoji] = useState('🏠');
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [emailInput, setEmailInput] = useState('');
+    const [invitedEmails, setInvitedEmails] = useState<string[]>([]);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'info' as 'success' | 'error' | 'info' });
 
     const groupRepo = new GroupRepository();
     const authRepo = new AuthRepository();
     const createGroupUseCase = new CreateGroupUseCase(groupRepo);
+
+    const handleAddEmail = () => {
+        if (!emailInput || !emailInput.includes('@')) {
+            setToast({ visible: true, message: 'Digite um e-mail válido 📧', type: 'error' });
+            return;
+        }
+        if (invitedEmails.includes(emailInput)) {
+            setToast({ visible: true, message: 'Este e-mail já foi adicionado', type: 'info' });
+            return;
+        }
+        setInvitedEmails([...invitedEmails, emailInput]);
+        setEmailInput('');
+    };
+
+    const removeEmail = (email: string) => {
+        setInvitedEmails(invitedEmails.filter(e => e !== email));
+    };
 
     const handleCreate = async () => {
         if (!name.trim()) {
@@ -28,10 +53,12 @@ export const CreateGroupScreen = () => {
         try {
             const user = await authRepo.getCurrentUser();
             if (user) {
-                await createGroupUseCase.execute(name, user.id, description);
-                Alert.alert('Sucesso', 'Grupo criado com sucesso! 🎉', [
-                    { text: 'Legal!', onPress: () => navigation.goBack() }
-                ]);
+                // In a real app, we would send invites to 'invitedEmails' here
+                await createGroupUseCase.execute(name, user.id, description); // Todo: Pass emoji
+                setToast({ visible: true, message: 'Grupo criado com sucesso! 🎉', type: 'success' });
+                setTimeout(() => {
+                    navigation.goBack();
+                }, 1500);
             }
         } catch (error) {
             Alert.alert('Erro', 'Não foi possível criar o grupo.');
@@ -56,10 +83,10 @@ export const CreateGroupScreen = () => {
 
                 <View style={styles.content}>
                     <View style={styles.iconSection}>
-                        <TouchableOpacity style={styles.iconCircle}>
-                            <Ionicons name="camera" size={30} color="#FFF" />
+                        <TouchableOpacity style={styles.iconCircle} onPress={() => setShowEmojiPicker(true)}>
+                            <Text style={{ fontSize: 40 }}>{emoji}</Text>
                         </TouchableOpacity>
-                        <Text style={styles.iconText}>Foto do Grupo</Text>
+                        <Text style={styles.iconText}>Ícone do Grupo</Text>
                     </View>
 
                     <View style={styles.form}>
@@ -92,6 +119,39 @@ export const CreateGroupScreen = () => {
                                 />
                             </View>
                         </View>
+
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>Convidar Membros</Text>
+                            <View style={styles.inputWrapper}>
+                                <Ionicons name="mail-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="E-mail do amigo"
+                                    placeholderTextColor={COLORS.textSecondary}
+                                    value={emailInput}
+                                    onChangeText={setEmailInput}
+                                    keyboardType="email-address"
+                                    autoCapitalize="none"
+                                />
+                                <TouchableOpacity onPress={handleAddEmail} style={styles.addButton}>
+                                    <Ionicons name="add" size={24} color={COLORS.primary} />
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* Invited List */}
+                            {invitedEmails.length > 0 && (
+                                <View style={styles.inviteList}>
+                                    {invitedEmails.map((email, index) => (
+                                        <View key={index} style={styles.inviteItem}>
+                                            <Text style={styles.inviteEmail}>{email}</Text>
+                                            <TouchableOpacity onPress={() => removeEmail(email)}>
+                                                <Ionicons name="close-circle" size={20} color={COLORS.textSecondary} />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
+                        </View>
                     </View>
                 </View>
             </ScrollView>
@@ -112,6 +172,19 @@ export const CreateGroupScreen = () => {
                     )}
                 </TouchableOpacity>
             </View>
+
+            <EmojiPickerModal
+                visible={showEmojiPicker}
+                onClose={() => setShowEmojiPicker(false)}
+                onSelect={setEmoji}
+            />
+
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
         </KeyboardAvoidingView>
     );
 };
@@ -147,15 +220,17 @@ const styles = StyleSheet.create({
         width: 90,
         height: 90,
         borderRadius: 45,
-        backgroundColor: COLORS.primary,
+        backgroundColor: '#FFF',
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 12,
         shadowColor: COLORS.primary,
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.3,
-        shadowRadius: 10,
-        elevation: 8,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 4,
+        borderWidth: 1,
+        borderColor: '#F1F5F9'
     },
     iconText: { color: COLORS.primary, fontSize: 13, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
     form: { gap: 24 },
@@ -210,4 +285,27 @@ const styles = StyleSheet.create({
         elevation: 6,
     },
     createText: { color: '#FFF', fontSize: 18, fontWeight: '800' },
+    addButton: {
+        padding: 8,
+    },
+    inviteList: {
+        marginTop: 12,
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    inviteItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F1F5F9',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        gap: 6,
+    },
+    inviteEmail: {
+        color: COLORS.text,
+        fontSize: 13,
+        fontWeight: '600',
+    },
 });
