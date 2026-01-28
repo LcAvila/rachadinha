@@ -13,7 +13,12 @@ export class FinalizeExpenseUseCase {
     async execute(expenseId: string): Promise<void> {
         const expense = await this.expenseRepository.getExpense(expenseId);
         if (!expense) throw new Error('Despesa não encontrada');
-        if (expense.status === 'waiting_payment' || expense.status === 'paid') throw new Error('Despesa já finalizada');
+        if (expense.status === 'paid') throw new Error('Despesa já paga e finalizada');
+
+        // Se já estiver em aguardando, vamos limpar os pagamentos antigos para evitar duplicidade
+        if (expense.status === 'waiting_payment') {
+            await this.expenseRepository.deletePendingPaymentsByExpenseId(expenseId);
+        }
 
         // 1. Calcular Rateio
         const calculations = calculateProportionalAmounts(

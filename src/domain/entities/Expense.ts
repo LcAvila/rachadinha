@@ -12,7 +12,7 @@ export interface Expense {
     serviceFee: number;
     discount: number;
     status: ExpenseStatus;
-    invoiceUrl?: string;
+    invoiceUrl?: string | null;
     finalizedAt?: Date;
     createdAt: Date;
     items: ExpenseItem[];

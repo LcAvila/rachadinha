@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, StatusBar } from 'react-native';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { ExpenseRepository } from '../../infrastructure/firebase/ExpenseRepository';
@@ -13,12 +14,14 @@ import { Ionicons } from '@expo/vector-icons';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, FadeInDown } from 'react-native-reanimated';
 import { StatusBadge } from '../components/StatusBadge';
 import { Dashboard } from '../components/Dashboard';
+import { NotificationRepository } from '../../infrastructure/firebase/NotificationRepository';
 
 type HomeScreenProp = StackNavigationProp<RootStackParamList, 'Home'>;
 
 export const HomeScreen = () => {
     const navigation = useNavigation<HomeScreenProp>();
     const route = useRoute();
+    const insets = useSafeAreaInsets();
     // @ts-ignore - route params might be undefined if accessed directly, but TabNavigator sets them.
     const filterStatus: ExpenseStatus = route.params?.filterStatus || 'draft';
 
@@ -28,9 +31,11 @@ export const HomeScreen = () => {
     const [pendingStats, setPendingStats] = useState({ toReceive: 0, toPay: 0 });
     const [menuOpen, setMenuOpen] = useState(false);
     const [userName, setUserName] = useState('');
+    const [unreadCount, setUnreadCount] = useState(0);
 
     const expenseRepo = new ExpenseRepository();
     const authRepo = new AuthRepository();
+    const notifRepo = new NotificationRepository();
     const pendingUseCase = new GetPendingExpensesUseCase(expenseRepo);
 
     const fetchData = useCallback(async () => {
@@ -53,6 +58,35 @@ export const HomeScreen = () => {
             const totalReceive = toReceive.reduce((acc, p) => acc + p.amount, 0);
             const totalPay = toPay.reduce((acc, p) => acc + p.amount, 0);
             setPendingStats({ toReceive: totalReceive, toPay: totalPay });
+
+            // Cleanup old drafts
+            const oneDayAgo = new Date();
+            oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+
+            const expiredDrafts = fetchedExpenses.filter(e => e.status === 'draft' && e.createdAt < oneDayAgo);
+            for (const draft of expiredDrafts) {
+                await expenseRepo.deleteExpense(draft.id);
+                // Notify user
+                await notifRepo.createNotification({
+                    userId: user.id,
+                    title: 'Rascunho Excluído 🗑️',
+                    message: `Sua rachadinha "${draft.title}" foi excluída automaticamente por estar há mais de 24h sem alterações.`,
+                    type: 'info',
+                    read: false,
+                    createdAt: new Date()
+                });
+            }
+
+            if (expiredDrafts.length > 0) {
+                // Refresh list if anything was deleted
+                const updatedExpenses = await expenseRepo.getUserExpenses(user.id);
+                setAllExpenses(updatedExpenses);
+                setFilteredExpenses(updatedExpenses.filter(e => e.status === filterStatus));
+            }
+
+            // Fetch unread notifications count
+            const notifications = await notifRepo.getUserNotifications(user.id);
+            setUnreadCount(notifications.filter(n => !n.read).length);
 
         } catch (error) {
             console.error(error);
@@ -133,7 +167,7 @@ export const HomeScreen = () => {
         <View style={styles.container}>
             <StatusBar backgroundColor={COLORS.primary} barStyle="light-content" />
 
-            <View style={styles.header}>
+            <View style={[styles.header, { paddingTop: insets.top + 20 }]}>
                 <Text style={styles.headerTitle}>Rachadinha</Text>
                 <View style={styles.headerActions}>
                     <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -142,6 +176,11 @@ export const HomeScreen = () => {
                     </TouchableOpacity>
                     <TouchableOpacity style={{ marginLeft: 16 }} onPress={() => navigation.navigate('Notifications')}>
                         <Ionicons name="notifications-outline" size={26} color="#FFF" />
+                        {unreadCount > 0 && (
+                            <View style={styles.notificationBadge}>
+                                <Text style={styles.notificationBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+                            </View>
+                        )}
                     </TouchableOpacity>
                 </View>
             </View>
@@ -160,7 +199,8 @@ export const HomeScreen = () => {
                     data={filteredExpenses}
                     keyExtractor={item => item.id}
                     renderItem={renderExpenseItem}
-                    contentContainerStyle={{ paddingBottom: 100 }}
+
+                    contentContainerStyle={{ paddingBottom: 100 + insets.bottom }}
                     refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchData} colors={[COLORS.primary]} />}
                     ListEmptyComponent={
                         !loading ? <Text style={styles.emptyText}>Nenhuma despesa recente.</Text> : null
@@ -215,7 +255,7 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: COLORS.background },
     header: {
         backgroundColor: COLORS.primary,
-        paddingTop: 50,
+        // paddingTop dynamic
         paddingBottom: 20,
         paddingHorizontal: 24,
         flexDirection: 'row',
@@ -230,6 +270,25 @@ const styles = StyleSheet.create({
     headerActions: {
         flexDirection: 'row',
         alignItems: 'center',
+    },
+    notificationBadge: {
+        position: 'absolute',
+        top: -4,
+        right: -4,
+        backgroundColor: '#EF4444',
+        borderRadius: 10,
+        minWidth: 18,
+        height: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: COLORS.primary,
+        paddingHorizontal: 4,
+    },
+    notificationBadgeText: {
+        color: '#FFF',
+        fontSize: 10,
+        fontWeight: 'bold',
     },
     content: {
         flex: 1,
@@ -349,7 +408,7 @@ const styles = StyleSheet.create({
     },
     bottomBar: {
         position: 'absolute',
-        bottom: 30,
+        bottom: 30, // Can be adjusted with insets if needed, but absolute 30 is usually okay above tab bar
         right: 30,
         alignItems: 'flex-end',
     },

@@ -14,4 +14,7 @@ export interface INotificationRepository {
             data?: any;
         }>
     ): Promise<void>;
+    getUserNotifications(userId: string): Promise<any[]>;
+    markAsRead(notificationId: string): Promise<void>;
+    createNotification(notification: any): Promise<void>;
 }

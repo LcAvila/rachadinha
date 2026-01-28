@@ -4,13 +4,17 @@ import { HomeScreen } from '../screens/HomeScreen';
 import { FinancialScreen } from '../screens/FinancialScreen';
 import { COLORS } from '../../core/constants/constants';
 import { Ionicons } from '@expo/vector-icons';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 
 const Tab = createBottomTabNavigator();
 
 const TabBarIcon = ({ name, focused }: { name: any; focused: boolean }) => (
     <View style={[styles.iconContainer, focused && styles.iconActive]}>
-        <Ionicons name={name} size={24} color={focused ? COLORS.primary : COLORS.textSecondary} />
+        <Ionicons
+            name={focused ? name.replace('-outline', '') : name}
+            size={22}
+            color={focused ? '#FFF' : COLORS.textSecondary}
+        />
     </View>
 );
 
@@ -23,6 +27,7 @@ export const MainTabNavigator = () => {
                 tabBarShowLabel: true,
                 tabBarActiveTintColor: COLORS.primary,
                 tabBarInactiveTintColor: COLORS.textSecondary,
+                tabBarLabelStyle: styles.tabBarLabel,
             }}
         >
             <Tab.Screen
@@ -52,6 +57,14 @@ export const MainTabNavigator = () => {
                     tabBarIcon: ({ focused }) => <TabBarIcon name="checkmark-done-circle-outline" focused={focused} />,
                 }}
             />
+            <Tab.Screen
+                name="Financial"
+                component={FinancialScreen}
+                options={{
+                    tabBarLabel: 'Financeiro',
+                    tabBarIcon: ({ focused }) => <TabBarIcon name="pie-chart-outline" focused={focused} />,
+                }}
+            />
         </Tab.Navigator>
     );
 };
@@ -60,22 +73,37 @@ const styles = StyleSheet.create({
     tabBar: {
         backgroundColor: '#FFF',
         borderTopWidth: 0,
-        elevation: 10,
-        height: 70,
-        paddingBottom: 10,
-        paddingTop: 10,
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
+        elevation: 20,
+        height: Platform.OS === 'ios' ? 95 : 75,
+        paddingBottom: Platform.OS === 'ios' ? 30 : 12,
+        paddingTop: 12,
+        borderTopLeftRadius: 30,
+        borderTopRightRadius: 30,
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
+        shadowOffset: { width: 0, height: -10 },
+        shadowOpacity: 0.12,
+        shadowRadius: 15,
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+    },
+    tabBarLabel: {
+        fontSize: 11,
+        fontWeight: '700',
+        marginTop: 4,
     },
     iconContainer: {
-        padding: 8,
-        borderRadius: 20,
+        width: 48,
+        height: 32,
+        borderRadius: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 2,
     },
     iconActive: {
-        backgroundColor: COLORS.surfaceLight,
+        backgroundColor: COLORS.primary,
+        width: 50,
+        height: 32,
     }
 });

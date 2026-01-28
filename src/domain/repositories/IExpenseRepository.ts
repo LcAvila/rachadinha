@@ -10,6 +10,7 @@ export interface IExpenseRepository {
     addItemToExpense(expenseId: string, item: ExpenseItem): Promise<void>;
     finalizeExpense(expenseId: string): Promise<void>;
     getUserExpenses(userId: string): Promise<Expense[]>;
+    deleteExpense(expenseId: string): Promise<void>;
 
     createPendingPayment(payment: Omit<PendingPayment, 'id'>): Promise<PendingPayment>;
     getPendingPaymentsForUser(userId: string): Promise<{
@@ -17,6 +18,7 @@ export interface IExpenseRepository {
         toPay: PendingPayment[];
     }>;
     markPaymentAsPaid(paymentId: string): Promise<void>;
+    deletePendingPaymentsByExpenseId(expenseId: string): Promise<void>;
 
     getAllUsers(): Promise<User[]>;
 }

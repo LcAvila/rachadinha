@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ExpenseRepository } from '../../infrastructure/firebase/ExpenseRepository';
 import { AuthRepository } from '../../infrastructure/firebase/AuthRepository';
 import { GetPendingExpensesUseCase } from '../../application/usecases/expenses/GetPendingExpensesUseCase';
@@ -18,6 +19,7 @@ type PendingExpensesNavProp = StackNavigationProp<RootStackParamList, 'PendingEx
 
 export const PendingExpensesScreen = () => {
     const navigation = useNavigation<PendingExpensesNavProp>();
+    const insets = useSafeAreaInsets();
     const [activeTab, setActiveTab] = useState<'toReceive' | 'toPay' | 'finished'>('toReceive');
     const [toReceive, setToReceive] = useState<PendingPayment[]>([]);
     const [toPay, setToPay] = useState<PendingPayment[]>([]);
@@ -131,8 +133,8 @@ export const PendingExpensesScreen = () => {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
+        <View style={styles.container}>
+            <View style={[styles.header, { paddingTop: insets.top + 20 }]}>
                 <Text style={styles.title}>Financeiro</Text>
                 <TouchableOpacity onPress={loadData}>
                     <Ionicons name="refresh" size={24} color={COLORS.primary} />
@@ -173,7 +175,7 @@ export const PendingExpensesScreen = () => {
                         </View>
                     ) : null
                 }
-                contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
+                contentContainerStyle={{ padding: 20, paddingBottom: 100 + insets.bottom }}
             />
 
             <CustomConfirmModal
@@ -186,7 +188,7 @@ export const PendingExpensesScreen = () => {
                 onCancel={() => setIsConfirmVisible(false)}
             />
             <Celebration ref={celebrationRef} />
-        </SafeAreaView>
+        </View>
     );
 };
 
@@ -197,7 +199,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 20,
-        paddingTop: 40,
+        // paddingTop: 40, dynamic
         paddingBottom: 20,
     },
     title: { fontSize: 28, fontWeight: '900', color: COLORS.text },

@@ -12,6 +12,7 @@ import {
     Image,
     ScrollView
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
@@ -28,10 +29,12 @@ type LoginScreenProp = StackNavigationProp<RootStackParamList, 'Login'>;
 
 export const LoginScreen = () => {
     const navigation = useNavigation<LoginScreenProp>();
+    const insets = useSafeAreaInsets();
     const [isLogin, setIsLogin] = useState(true);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [name, setName] = useState('');
+    const [username, setUsername] = useState('');
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [toast, setToast] = useState({ visible: false, message: '', type: 'info' as 'success' | 'error' | 'info' });
@@ -45,8 +48,8 @@ export const LoginScreen = () => {
             setToast({ visible: true, message: 'Preencha todos os campos 🧐', type: 'error' });
             return;
         }
-        if (!isLogin && !name) {
-            setToast({ visible: true, message: 'Como devemos te chamar? Preencha o nome 😊', type: 'error' });
+        if (!isLogin && (!name || !username)) {
+            setToast({ visible: true, message: 'Preencha nome e usuário 😊', type: 'error' });
             return;
         }
 
@@ -56,7 +59,7 @@ export const LoginScreen = () => {
                 await loginUseCase.execute(email, password);
                 setToast({ visible: true, message: 'Login realizado com sucesso! 🎉', type: 'success' });
             } else {
-                await registerUseCase.execute(email, password, name);
+                await registerUseCase.execute(email, password, name, username);
                 setToast({ visible: true, message: 'Sua conta foi criada com sucesso! 🎉', type: 'success' });
             }
         } catch (error: any) {
@@ -78,7 +81,7 @@ export const LoginScreen = () => {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.container}
         >
-            <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={{ flexGrow: 1, paddingTop: insets.top, paddingBottom: insets.bottom }} showsVerticalScrollIndicator={false}>
                 <View style={styles.content}>
                     <Animated.View entering={FadeInUp.delay(200).duration(800)} style={styles.header}>
                         {/* Logo Image */}
@@ -108,15 +111,28 @@ export const LoginScreen = () => {
                             </View>
                         )}
 
+                        {!isLogin && (
+                            <View style={styles.inputContainer}>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Nome de Usuário"
+                                    placeholderTextColor={COLORS.textSecondary}
+                                    value={username}
+                                    onChangeText={setUsername}
+                                    autoCapitalize="none"
+                                />
+                            </View>
+                        )}
+
                         <View style={styles.inputContainer}>
                             <TextInput
                                 style={styles.input}
-                                placeholder="Email"
+                                placeholder={isLogin ? "Usuário ou Email" : "Email"}
                                 placeholderTextColor={COLORS.textSecondary}
                                 value={email}
                                 onChangeText={setEmail}
                                 autoCapitalize="none"
-                                keyboardType="email-address"
+                                keyboardType={isLogin ? "default" : "email-address"}
                             />
                         </View>
 
@@ -163,7 +179,7 @@ export const LoginScreen = () => {
                 type={toast.type}
                 onHide={() => setToast({ ...toast, visible: false })}
             />
-        </KeyboardAvoidingView>
+        </KeyboardAvoidingView >
     );
 };
 

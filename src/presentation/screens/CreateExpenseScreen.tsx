@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Image } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Image, Platform, KeyboardAvoidingView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
@@ -18,6 +19,7 @@ type CreateExpenseScreenProp = StackNavigationProp<RootStackParamList, 'CreateEx
 
 export const CreateExpenseScreen = () => {
     const navigation = useNavigation<CreateExpenseScreenProp>();
+    const insets = useSafeAreaInsets();
     const [title, setTitle] = useState('');
     const [deliveryFee, setDeliveryFee] = useState('');
     const [serviceFee, setServiceFee] = useState('');
@@ -35,7 +37,7 @@ export const CreateExpenseScreen = () => {
         }
 
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
             quality: 0.7,
         });
@@ -46,20 +48,32 @@ export const CreateExpenseScreen = () => {
     };
 
     const uploadImage = async (uri: string): Promise<string | undefined> => {
-        try {
+        return new Promise((resolve, reject) => {
             setUploading(true);
-            const response = await fetch(uri);
-            const blob = await response.blob();
-            const filename = `invoices/${Date.now()}.jpg`;
-            const storageRef = ref(storage, filename);
-            await uploadBytes(storageRef, blob);
-            return await getDownloadURL(storageRef);
-        } catch (error) {
-            console.error('Error uploading image:', error);
-            Alert.alert('Erro', 'Falha ao fazer upload da nota fiscal.');
-        } finally {
+            const xhr = new XMLHttpRequest();
+            xhr.onload = async () => {
+                try {
+                    const blob = xhr.response;
+                    const filename = `invoices/${Date.now()}.jpg`;
+                    const storageRef = ref(storage, filename);
+                    await uploadBytes(storageRef, blob);
+                    const url = await getDownloadURL(storageRef);
+                    resolve(url);
+                } catch (error) {
+                    console.error('Error in xhr.onload:', error);
+                    reject(error);
+                }
+            };
+            xhr.onerror = (e) => {
+                console.error('XHR Error:', e);
+                reject(new TypeError('Network request failed'));
+            };
+            xhr.responseType = 'blob';
+            xhr.open('GET', uri, true);
+            xhr.send(null);
+        }).finally(() => {
             setUploading(false);
-        }
+        }) as Promise<string | undefined>;
     };
 
     const handleCreate = async () => {
@@ -93,7 +107,8 @@ export const CreateExpenseScreen = () => {
                 serviceFee: parseCurrencyInput(serviceFee),
                 discount: parseCurrencyInput(discount),
                 totalAmount: 0,
-                invoiceUrl
+                invoiceUrl: invoiceUrl || null,
+                involvedUserIds: [] // Initially just the creator? Or empty? Assuming empty.
             });
 
             setToast({ visible: true, message: 'Despesa criada com sucesso! 🎉', type: 'success' });
@@ -111,116 +126,129 @@ export const CreateExpenseScreen = () => {
     };
 
     return (
-        <ScrollView contentContainerStyle={styles.container} style={{ backgroundColor: '#F8FAFC' }}>
-            <View style={styles.header}>
-                <View style={styles.iconCircle}>
-                    <Ionicons name="receipt" size={32} color={COLORS.primary} />
-                </View>
-                <Text style={styles.title}>Nova Despesa</Text>
-                <Text style={styles.subtitle}>Divida a conta de forma justa and rápida.</Text>
-            </View>
-
-            <View style={styles.form}>
-                <View style={styles.inputGroup}>
-                    <Text style={styles.label}>Título da Despesa</Text>
-                    <View style={styles.inputWrapper}>
-                        <Ionicons name="bookmark-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Ex: Jantar no Outback"
-                            placeholderTextColor={COLORS.textSecondary}
-                            value={title}
-                            onChangeText={setTitle}
-                        />
-                    </View>
-                </View>
-
-                <View style={styles.row}>
-                    <View style={[styles.inputGroup, { flex: 1 }]}>
-                        <Text style={styles.label}>Taxa/Entrega</Text>
-                        <View style={styles.inputWrapper}>
-                            <Text style={styles.currencyPrefix}>R$</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="0,00"
-                                placeholderTextColor={COLORS.textSecondary}
-                                keyboardType="numeric"
-                                value={deliveryFee}
-                                onChangeText={(text) => setDeliveryFee(formatCurrencyInput(text))}
-                            />
-                        </View>
-                    </View>
-                    <View style={[styles.inputGroup, { flex: 1 }]}>
-                        <Text style={styles.label}>Serviço (10%)</Text>
-                        <View style={styles.inputWrapper}>
-                            <Text style={styles.currencyPrefix}>R$</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="0,00"
-                                placeholderTextColor={COLORS.textSecondary}
-                                keyboardType="numeric"
-                                value={serviceFee}
-                                onChangeText={(text) => setServiceFee(formatCurrencyInput(text))}
-                            />
-                        </View>
-                    </View>
-                </View>
-
-                <View style={styles.inputGroup}>
-                    <Text style={styles.label}>Desconto ou Cupom</Text>
-                    <View style={styles.inputWrapper}>
-                        <Ionicons name="pricetag-outline" size={20} color={COLORS.success} style={styles.inputIcon} />
-                        <TextInput
-                            style={styles.input}
-                            placeholder="R$ 0,00"
-                            placeholderTextColor={COLORS.textSecondary}
-                            keyboardType="numeric"
-                            value={discount}
-                            onChangeText={(text) => setDiscount(formatCurrencyInput(text))}
-                        />
-                    </View>
-                </View>
-
-                <View style={styles.inputGroup}>
-                    <Text style={styles.label}>Nota Fiscal (Upload)</Text>
-                    <TouchableOpacity style={styles.uploadButton} onPress={pickImage}>
-                        <Ionicons name="cloud-upload-outline" size={24} color={COLORS.primary} />
-                        <Text style={styles.uploadText}>{image ? 'Nota Selecionada ✅' : 'Selecionar Imagem'}</Text>
-                    </TouchableOpacity>
-                    {image && (
-                        <View style={styles.previewContainer}>
-                            <Image source={{ uri: image }} style={styles.previewImage} />
-                            <TouchableOpacity style={styles.removeImage} onPress={() => setImage(null)}>
-                                <Ionicons name="close-circle" size={24} color={COLORS.error || '#FF4D4D'} />
-                            </TouchableOpacity>
-                        </View>
-                    )}
-                </View>
-
+        <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+        >
+            <ScrollView contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 20 }]} style={{ backgroundColor: '#F8FAFC' }}>
+                {/* Back Button */}
                 <TouchableOpacity
-                    style={[styles.button, (loading || uploading) && { opacity: 0.7 }]}
-                    onPress={handleCreate}
-                    disabled={loading || uploading}
-                    activeOpacity={0.8}
+                    style={[styles.backButton, { top: insets.top + 10 }]}
+                    onPress={() => navigation.goBack()}
                 >
-                    {(loading || uploading) ? (
-                        <ActivityIndicator color='#FFF' />
-                    ) : (
-                        <>
-                            <Text style={styles.buttonText}>Continuar para Itens</Text>
-                            <Ionicons name="chevron-forward" size={20} color="#FFF" />
-                        </>
-                    )}
+                    <Ionicons name="arrow-back" size={24} color={COLORS.text} />
                 </TouchableOpacity>
-            </View>
 
-            <Toast
-                visible={toast.visible}
-                message={toast.message}
-                type={toast.type}
-                onHide={() => setToast({ ...toast, visible: false })}
-            />
-        </ScrollView >
+                <View style={[styles.header, { marginTop: insets.top + 20 }]}>
+                    <View style={styles.iconCircle}>
+                        <Ionicons name="receipt" size={32} color={COLORS.primary} />
+                    </View>
+                    <Text style={styles.title}>Nova Despesa</Text>
+                    <Text style={styles.subtitle}>Divida a conta de forma justa and rápida.</Text>
+                </View>
+
+                <View style={styles.form}>
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Título da Despesa</Text>
+                        <View style={styles.inputWrapper}>
+                            <Ionicons name="bookmark-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Ex: Jantar no Outback"
+                                placeholderTextColor={COLORS.textSecondary}
+                                value={title}
+                                onChangeText={setTitle}
+                            />
+                        </View>
+                    </View>
+
+                    <View style={styles.row}>
+                        <View style={[styles.inputGroup, { flex: 1 }]}>
+                            <Text style={styles.label}>Taxa/Entrega</Text>
+                            <View style={styles.inputWrapper}>
+                                <Text style={styles.currencyPrefix}>R$</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="0,00"
+                                    placeholderTextColor={COLORS.textSecondary}
+                                    keyboardType="numeric"
+                                    value={deliveryFee}
+                                    onChangeText={(text) => setDeliveryFee(formatCurrencyInput(text))}
+                                />
+                            </View>
+                        </View>
+                        <View style={[styles.inputGroup, { flex: 1 }]}>
+                            <Text style={styles.label}>Serviço (10%)</Text>
+                            <View style={styles.inputWrapper}>
+                                <Text style={styles.currencyPrefix}>R$</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="0,00"
+                                    placeholderTextColor={COLORS.textSecondary}
+                                    keyboardType="numeric"
+                                    value={serviceFee}
+                                    onChangeText={(text) => setServiceFee(formatCurrencyInput(text))}
+                                />
+                            </View>
+                        </View>
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Desconto ou Cupom</Text>
+                        <View style={styles.inputWrapper}>
+                            <Ionicons name="pricetag-outline" size={20} color={COLORS.success} style={styles.inputIcon} />
+                            <TextInput
+                                style={styles.input}
+                                placeholder="R$ 0,00"
+                                placeholderTextColor={COLORS.textSecondary}
+                                keyboardType="numeric"
+                                value={discount}
+                                onChangeText={(text) => setDiscount(formatCurrencyInput(text))}
+                            />
+                        </View>
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Nota Fiscal (Upload)</Text>
+                        <TouchableOpacity style={styles.uploadButton} onPress={pickImage}>
+                            <Ionicons name="cloud-upload-outline" size={24} color={COLORS.primary} />
+                            <Text style={styles.uploadText}>{image ? 'Nota Selecionada ✅' : 'Selecionar Imagem'}</Text>
+                        </TouchableOpacity>
+                        {image && (
+                            <View style={styles.previewContainer}>
+                                <Image source={{ uri: image }} style={styles.previewImage} />
+                                <TouchableOpacity style={styles.removeImage} onPress={() => setImage(null)}>
+                                    <Ionicons name="close-circle" size={24} color={COLORS.error || '#FF4D4D'} />
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </View>
+
+                    <TouchableOpacity
+                        style={[styles.button, (loading || uploading) && { opacity: 0.7 }]}
+                        onPress={handleCreate}
+                        disabled={loading || uploading}
+                        activeOpacity={0.8}
+                    >
+                        {(loading || uploading) ? (
+                            <ActivityIndicator color='#FFF' />
+                        ) : (
+                            <>
+                                <Text style={styles.buttonText}>Continuar para Itens</Text>
+                                <Ionicons name="chevron-forward" size={20} color="#FFF" />
+                            </>
+                        )}
+                    </TouchableOpacity>
+                </View>
+
+                <Toast
+                    visible={toast.visible}
+                    message={toast.message}
+                    type={toast.type}
+                    onHide={() => setToast({ ...toast, visible: false })}
+                />
+            </ScrollView >
+        </KeyboardAvoidingView>
     );
 };
 
@@ -229,9 +257,25 @@ const styles = StyleSheet.create({
         flexGrow: 1,
         padding: 24,
     },
+    backButton: {
+        position: 'absolute',
+        left: 20,
+        zIndex: 10,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#FFF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+    },
     header: {
         alignItems: 'center',
-        marginTop: 20,
+        // marginTop: dynamic
         marginBottom: 32,
     },
     iconCircle: {

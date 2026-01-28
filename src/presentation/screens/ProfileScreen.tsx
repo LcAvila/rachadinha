@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, ScrollView, Image } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { AuthRepository } from '../../infrastructure/firebase/AuthRepository';
 import { User } from '../../domain/entities/User';
@@ -13,9 +14,11 @@ import { AnimatedButton } from '../components/AnimatedButton';
 
 export const ProfileScreen = () => {
     const navigation = useNavigation<any>();
+    const insets = useSafeAreaInsets();
     const [user, setUser] = useState<User | null>(null);
     const [isEditing, setIsEditing] = useState(false);
     const [nickname, setNickname] = useState('');
+    const [username, setUsername] = useState('');
     const [bio, setBio] = useState('');
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
@@ -32,6 +35,7 @@ export const ProfileScreen = () => {
         const currentUser = await authRepo.getCurrentUser();
         setUser(currentUser);
         setNickname(currentUser?.nickname || '');
+        setUsername(currentUser?.username || '');
         setBio(currentUser?.bio || '');
     };
 
@@ -44,7 +48,7 @@ export const ProfileScreen = () => {
 
         try {
             const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ['images'],
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
                 allowsEditing: true,
                 aspect: [1, 1],
                 quality: 0.8,
@@ -89,8 +93,18 @@ export const ProfileScreen = () => {
         if (!user) return;
         setLoading(true);
         try {
-            await authRepo.updateProfile(user.id, { nickname, bio });
-            setUser({ ...user, nickname, bio });
+            // Check if username is being set/changed and if it's available
+            if (username && username !== user.username) {
+                const isAvailable = await authRepo.checkUsernameAvailability(username);
+                if (!isAvailable) {
+                    setToast({ visible: true, message: 'Este nome de usuário já está em uso 😕', type: 'error' });
+                    setLoading(false);
+                    return;
+                }
+            }
+
+            await authRepo.updateProfile(user.id, { nickname, bio, username });
+            setUser({ ...user, nickname, bio, username });
             setIsEditing(false);
             setToast({ visible: true, message: 'Perfil atualizado com sucesso! ✨', type: 'success' });
         } catch (error) {
@@ -121,6 +135,7 @@ export const ProfileScreen = () => {
         );
     }
 
+
     return (
         <View style={styles.container}>
             <LinearGradient
@@ -129,12 +144,12 @@ export const ProfileScreen = () => {
             />
 
             {/* Back Button */}
-            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <TouchableOpacity style={[styles.backButton, { top: insets.top + 10 }]} onPress={() => navigation.goBack()}>
                 <Ionicons name="arrow-back" size={24} color={COLORS.text} />
             </TouchableOpacity>
 
-            <ScrollView contentContainerStyle={styles.content}>
-                <View style={styles.header}>
+            <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 40 + insets.bottom }]}>
+                <View style={[styles.header, { paddingTop: insets.top + 20 }]}>
                     <View style={styles.avatarContainer}>
                         <TouchableOpacity onPress={pickImage} disabled={uploading}>
                             {user.photoUrl ? (
@@ -160,6 +175,7 @@ export const ProfileScreen = () => {
                     {!isEditing ? (
                         <View style={styles.infoContainer}>
                             <Text style={styles.displayName}>{user.nickname || user.name}</Text>
+                            {user.username && <Text style={styles.username}>@{user.username}</Text>}
                             <Text style={styles.name}>Nome: {user.name}</Text>
                             <Text style={styles.email}>{user.email}</Text>
                             {user.bio && <Text style={styles.bio}>{user.bio}</Text>}
@@ -176,6 +192,18 @@ export const ProfileScreen = () => {
                                     style={[styles.input, styles.readOnlyInput]}
                                     value={user.name}
                                     editable={false}
+                                />
+                            </View>
+
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.label}>Nome de Usuário</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    value={username}
+                                    onChangeText={(text) => setUsername(text.toLowerCase().replace(/[^a-z0-9_.]/g, ''))}
+                                    placeholder="Ex: joao.silva"
+                                    placeholderTextColor={COLORS.textSecondary}
+                                    autoCapitalize="none"
                                 />
                             </View>
 
@@ -269,7 +297,7 @@ const styles = StyleSheet.create({
     },
     backButton: {
         position: 'absolute',
-        top: 50,
+        // top: 50, dynamic
         left: 20,
         zIndex: 10,
         width: 40,
@@ -289,7 +317,7 @@ const styles = StyleSheet.create({
     },
     header: {
         alignItems: 'center',
-        paddingTop: 60,
+        // paddingTop: 60, dynamic
         paddingBottom: 32,
         backgroundColor: '#FFF',
         borderBottomLeftRadius: 32,
@@ -364,6 +392,12 @@ const styles = StyleSheet.create({
         color: COLORS.textSecondary,
         marginBottom: 4,
         fontWeight: '600',
+    },
+    username: {
+        fontSize: 14,
+        color: COLORS.primary,
+        marginBottom: 8,
+        fontWeight: '700',
     },
     email: {
         fontSize: 14,

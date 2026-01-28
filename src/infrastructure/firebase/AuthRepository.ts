@@ -6,7 +6,7 @@ import {
     User as FirebaseUser,
     updatePassword as firebaseUpdatePassword
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { auth, db, storage } from './config';
 import { IAuthRepository } from '../../domain/repositories/IAuthRepository';
@@ -14,7 +14,22 @@ import { User } from '../../domain/entities/User';
 import { FIREBASE_COLLECTIONS } from '../../core/constants/constants';
 
 export class AuthRepository implements IAuthRepository {
-    async login(email: string, password: string): Promise<User> {
+    async login(identifier: string, password: string): Promise<User> {
+        let email = identifier;
+
+        // If identifier is not an email, lookup the email by username
+        if (!identifier.includes('@')) {
+            const usersRef = collection(db, FIREBASE_COLLECTIONS.USERS);
+            const q = query(usersRef, where("username", "==", identifier));
+            const querySnapshot = await getDocs(q);
+
+            if (querySnapshot.empty) {
+                throw new Error('auth/user-not-found');
+            }
+
+            email = querySnapshot.docs[0].data().email;
+        }
+
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const userDoc = await getDoc(doc(db, FIREBASE_COLLECTIONS.USERS, userCredential.user.uid));
 
@@ -24,6 +39,7 @@ export class AuthRepository implements IAuthRepository {
                 id: userCredential.user.uid,
                 name: data.name,
                 email: userCredential.user.email || '',
+                username: data.username,
                 nickname: data.nickname,
                 bio: data.bio,
                 photoUrl: data.photoUrl,
@@ -35,7 +51,14 @@ export class AuthRepository implements IAuthRepository {
         throw new Error('User not found in database');
     }
 
-    async register(email: string, password: string, name: string): Promise<User> {
+    async checkUsernameAvailability(username: string): Promise<boolean> {
+        const usersRef = collection(db, FIREBASE_COLLECTIONS.USERS);
+        const q = query(usersRef, where("username", "==", username));
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.empty;
+    }
+
+    async register(email: string, password: string, name: string, username?: string): Promise<User> {
         console.log('AuthRepository.register calling firebase...');
         try {
             const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -46,6 +69,7 @@ export class AuthRepository implements IAuthRepository {
                 id: userId,
                 name,
                 email,
+                username: username || email.split('@')[0], // Fallback if no username provided (should not happen in new flow)
                 nickname: name.split(' ')[0], // Default nickname is first name
                 photoUrl: '', // Default empty
                 createdAt: new Date(),
@@ -56,6 +80,7 @@ export class AuthRepository implements IAuthRepository {
             await setDoc(doc(db, FIREBASE_COLLECTIONS.USERS, userId), {
                 name,
                 email,
+                username: newUser.username,
                 nickname: newUser.nickname,
                 photoUrl: newUser.photoUrl,
                 createdAt: newUser.createdAt,
@@ -93,6 +118,7 @@ export class AuthRepository implements IAuthRepository {
                                 id: firebaseUser.uid,
                                 name: data.name,
                                 email: firebaseUser.email || '',
+                                username: data.username,
                                 nickname: data.nickname,
                                 bio: data.bio,
                                 photoUrl: data.photoUrl,

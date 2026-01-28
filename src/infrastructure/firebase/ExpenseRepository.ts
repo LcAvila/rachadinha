@@ -10,7 +10,9 @@ import {
     arrayUnion,
     Timestamp,
     orderBy,
-    increment
+    increment,
+    deleteDoc,
+    writeBatch
 } from 'firebase/firestore';
 import { db } from './config';
 import { IExpenseRepository } from '../../domain/repositories/IExpenseRepository';
@@ -22,12 +24,16 @@ import { FIREBASE_COLLECTIONS } from '../../core/constants/constants';
 
 export class ExpenseRepository implements IExpenseRepository {
     async createExpense(expense: Omit<Expense, 'id'>): Promise<Expense> {
-        const expenseWithInvolved = {
+        const expenseToSave = {
             ...expense,
-            involvedUserIds: [expense.createdBy]
+            involvedUserIds: expense.involvedUserIds.length > 0
+                ? Array.from(new Set([...expense.involvedUserIds, expense.createdBy]))
+                : [expense.createdBy]
         };
-        const docRef = await addDoc(collection(db, FIREBASE_COLLECTIONS.EXPENSES), expenseWithInvolved);
-        return { ...expenseWithInvolved, id: docRef.id };
+        // Filter out undefined values as Firestore doesn't support them
+        const cleanExpense = JSON.parse(JSON.stringify(expenseToSave));
+        const docRef = await addDoc(collection(db, FIREBASE_COLLECTIONS.EXPENSES), cleanExpense);
+        return { ...expenseToSave, id: docRef.id };
     }
 
     async getExpense(id: string): Promise<Expense | null> {
@@ -97,6 +103,11 @@ export class ExpenseRepository implements IExpenseRepository {
         return expenses.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     }
 
+    async deleteExpense(expenseId: string): Promise<void> {
+        const docRef = doc(db, FIREBASE_COLLECTIONS.EXPENSES, expenseId);
+        await deleteDoc(docRef);
+    }
+
     async createPendingPayment(payment: Omit<PendingPayment, 'id'>): Promise<PendingPayment> {
         const docRef = await addDoc(collection(db, FIREBASE_COLLECTIONS.PENDING_PAYMENTS), payment);
         return { ...payment, id: docRef.id };
@@ -132,6 +143,17 @@ export class ExpenseRepository implements IExpenseRepository {
             paid: true,
             paidAt: new Date()
         });
+    }
+
+    async deletePendingPaymentsByExpenseId(expenseId: string): Promise<void> {
+        const q = query(
+            collection(db, FIREBASE_COLLECTIONS.PENDING_PAYMENTS),
+            where('expenseId', '==', expenseId)
+        );
+        const snapshot = await getDocs(q);
+        const batch = writeBatch(db);
+        snapshot.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
     }
 
     async getAllUsers(): Promise<User[]> {

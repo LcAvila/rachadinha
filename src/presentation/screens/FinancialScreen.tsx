@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, StatusBar } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { COLORS } from '../../core/constants/constants';
 import { ExpenseRepository } from '../../infrastructure/firebase/ExpenseRepository';
@@ -15,6 +16,7 @@ export const FinancialScreen = () => {
     const [period, setPeriod] = useState<Period>('week');
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState<any>(null); // Use proper type
+    const insets = useSafeAreaInsets();
 
     const expenseRepo = new ExpenseRepository();
     const authRepo = new AuthRepository();
@@ -44,12 +46,12 @@ export const FinancialScreen = () => {
     return (
         <View style={styles.container}>
             <StatusBar backgroundColor="#FFF" barStyle="dark-content" />
-            <View style={styles.header}>
+            <View style={[styles.header, { paddingTop: insets.top + 20 }]}>
                 <Text style={styles.title}>Financeiro</Text>
             </View>
 
             <ScrollView
-                contentContainerStyle={styles.scrollContent}
+                contentContainerStyle={[styles.scrollContent, { paddingBottom: 100 + insets.bottom }]}
                 refreshControl={<RefreshControl refreshing={loading} onRefresh={loadStats} />}
             >
                 <PeriodSelector current={period} onChange={setPeriod} />
@@ -88,6 +90,50 @@ export const FinancialScreen = () => {
                                 <Text style={styles.emptyText}>Sem dados suficientes.</Text>
                             )}
                         </View>
+
+                        <Text style={styles.sectionTitle}>Relatório por Pessoa</Text>
+
+                        {/* Receivables Section */}
+                        <Text style={styles.subSectionTitle}>Quem me deve</Text>
+                        <View style={styles.personList}>
+                            {stats.toReceiveByPerson.map((person: any, index: number) => (
+                                <View key={`receive-${index}`} style={styles.personItem}>
+                                    <View style={styles.personLeft}>
+                                        <View style={[styles.avatarCircle, { backgroundColor: COLORS.success + '15' }]}>
+                                            <Ionicons name="arrow-down-outline" size={18} color={COLORS.success} />
+                                        </View>
+                                        <Text style={styles.personName}>{person.userName}</Text>
+                                    </View>
+                                    <Text style={[styles.personAmount, { color: COLORS.success }]}>
+                                        +{formatCurrency(person.amount)}
+                                    </Text>
+                                </View>
+                            ))}
+                            {stats.toReceiveByPerson.length === 0 && (
+                                <Text style={[styles.emptyText, { marginBottom: 12 }]}>Ninguém te deve nada no momento.</Text>
+                            )}
+                        </View>
+
+                        {/* Payables Section */}
+                        <Text style={styles.subSectionTitle}>Para quem eu devo</Text>
+                        <View style={styles.personList}>
+                            {stats.toPayByPerson.map((person: any, index: number) => (
+                                <View key={`pay-${index}`} style={styles.personItem}>
+                                    <View style={styles.personLeft}>
+                                        <View style={[styles.avatarCircle, { backgroundColor: COLORS.error + '15' }]}>
+                                            <Ionicons name="arrow-up-outline" size={18} color={COLORS.error} />
+                                        </View>
+                                        <Text style={styles.personName}>{person.userName}</Text>
+                                    </View>
+                                    <Text style={[styles.personAmount, { color: COLORS.error }]}>
+                                        -{formatCurrency(person.amount)}
+                                    </Text>
+                                </View>
+                            ))}
+                            {stats.toPayByPerson.length === 0 && (
+                                <Text style={styles.emptyText}>Você não deve nada a ninguém no momento.</Text>
+                            )}
+                        </View>
                     </>
                 )}
             </ScrollView>
@@ -98,7 +144,7 @@ export const FinancialScreen = () => {
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F8FAFC' },
     header: {
-        paddingTop: 60,
+        // paddingTop: 60, dynamic
         paddingBottom: 20,
         paddingHorizontal: 24,
         backgroundColor: '#FFF',
@@ -205,5 +251,49 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         color: COLORS.textSecondary,
         fontStyle: 'italic',
-    }
+    },
+    subSectionTitle: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: COLORS.textSecondary,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        marginBottom: 12,
+        marginTop: 16,
+    },
+    personList: {
+        backgroundColor: '#FFF',
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 20,
+    },
+    personItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+    },
+    personLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    avatarCircle: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    personName: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: COLORS.text,
+    },
+    personAmount: {
+        fontSize: 15,
+        fontWeight: 'bold',
+    },
 });

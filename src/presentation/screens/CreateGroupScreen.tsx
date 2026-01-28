@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { GroupRepository } from '../../infrastructure/firebase/GroupRepository';
 import { AuthRepository } from '../../infrastructure/firebase/AuthRepository';
@@ -13,6 +14,7 @@ import { FlatList } from 'react-native-gesture-handler';
 
 export const CreateGroupScreen = () => {
     const navigation = useNavigation();
+    const insets = useSafeAreaInsets();
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [loading, setLoading] = useState(false);
@@ -72,8 +74,8 @@ export const CreateGroupScreen = () => {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.container}
         >
-            <ScrollView contentContainerStyle={styles.scrollContent}>
-                <View style={styles.header}>
+            <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 20 }]}>
+                <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
                     <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                         <Ionicons name="chevron-back" size={24} color={COLORS.text} />
                     </TouchableOpacity>
@@ -197,7 +199,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 20,
-        paddingTop: 50,
+        // paddingTop: dynamic
         paddingBottom: 20,
     },
     backButton: {

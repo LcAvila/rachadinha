@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming, Easing, runOnJS, interpolate, Extrapolate, createAnimatedPropAdapter, processColor } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator, TouchableOpacity, Platform, Image, Modal, KeyboardAvoidingView } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -27,6 +28,7 @@ type AddItemsScreenNavProp = StackNavigationProp<RootStackParamList, 'AddItems'>
 export const AddItemsScreen = () => {
     const route = useRoute<AddItemsScreenRouteProp>();
     const navigation = useNavigation<AddItemsScreenNavProp>();
+    const insets = useSafeAreaInsets();
     const { expenseId } = route.params;
 
     const [expense, setExpense] = useState<Expense | null>(null);
@@ -199,9 +201,9 @@ export const AddItemsScreen = () => {
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 style={{ flex: 1 }}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0} // Adjust if needed
             >
-                <ScrollView contentContainerStyle={styles.container} style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+                <ScrollView contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 20, paddingTop: insets.top + 20 }]} style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
                     <View style={styles.headerRow}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
                             <TouchableOpacity onPress={() => navigation.navigate('Home')}>
@@ -316,7 +318,7 @@ export const AddItemsScreen = () => {
                                 <Text style={[styles.buttonText, styles.saveButtonText]}>Voltar</Text>
                             </TouchableOpacity>
 
-                            {expense.status === 'draft' && (
+                            {(expense.status === 'draft' || expense.status === 'waiting_payment') && (
                                 <TouchableOpacity
                                     style={[styles.actionButton, styles.finalizeButton, { opacity: finalizing ? 0.7 : 1 }]}
                                     onPress={handleFinalize}
@@ -332,9 +334,9 @@ export const AddItemsScreen = () => {
 
                             <TouchableOpacity
                                 style={[styles.actionButton, styles.saveButton]}
-                                onPress={() => setIsStatusModalVisible(true)}
+                                onPress={() => updateStatus('waiting_payment')}
                             >
-                                <Text style={[styles.buttonText, styles.saveButtonText]}>Mudar Status</Text>
+                                <Text style={[styles.buttonText, styles.saveButtonText]}>Salvar</Text>
                             </TouchableOpacity>
                         </View>
                     )}
@@ -419,7 +421,7 @@ export const AddItemsScreen = () => {
 };
 
 const styles = StyleSheet.create({
-    container: { flexGrow: 1, backgroundColor: '#F8FAFC', padding: 20 },
+    container: { flexGrow: 1, backgroundColor: '#F8FAFC', paddingHorizontal: 20 },
     center: { justifyContent: 'center', alignItems: 'center' },
     headerRow: {
         flexDirection: 'row',

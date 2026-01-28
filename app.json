@@ -28,6 +28,15 @@
     "web": {
       "favicon": "./assets/logo.png"
     },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "O app precisa acessar suas fotos para anexar a nota fiscal.",
+          "cameraPermission": "O app precisa acessar a câmera para tirar fotos da nota fiscal."
+        }
+      ]
+    ],
     "extra": {
       "eas": {
         "projectId": "ebf88d05-e644-4836-9a5c-f476cbba31f5"
