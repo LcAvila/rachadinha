@@ -6,19 +6,60 @@ import { COLORS } from '../../core/constants/constants';
 interface UserSelectorProps {
     users: User[];
     onSelect: (user: User) => void;
+    onMultiSelect?: (users: User[]) => void;
     selectedUser?: User;
+    selectedUsers?: User[];
+    multiSelect?: boolean;
 }
 
-export const UserSelector: React.FC<UserSelectorProps> = ({ users, onSelect, selectedUser }) => {
+export const UserSelector: React.FC<UserSelectorProps> = ({
+    users,
+    onSelect,
+    selectedUser,
+    multiSelect = false,
+    selectedUsers = [],
+    onMultiSelect
+}) => {
     const [modalVisible, setModalVisible] = useState(false);
     const [search, setSearch] = useState('');
     const [filteredUsers, setFilteredUsers] = useState(users);
+    const [tempSelectedUsers, setTempSelectedUsers] = useState<User[]>(selectedUsers);
 
     useEffect(() => {
         setFilteredUsers(
             users.filter(u => u.name.toLowerCase().includes(search.toLowerCase()))
         );
     }, [search, users]);
+
+    useEffect(() => {
+        if (modalVisible && multiSelect) {
+            setTempSelectedUsers(selectedUsers);
+        }
+    }, [modalVisible, multiSelect, selectedUsers]);
+
+    const toggleUser = (user: User) => {
+        if (tempSelectedUsers.find(u => u.id === user.id)) {
+            setTempSelectedUsers(tempSelectedUsers.filter(u => u.id !== user.id));
+        } else {
+            setTempSelectedUsers([...tempSelectedUsers, user]);
+        }
+    };
+
+    const handleConfirm = () => {
+        if (multiSelect && onMultiSelect) {
+            onMultiSelect(tempSelectedUsers);
+        }
+        setModalVisible(false);
+    };
+
+    const getDisplayText = () => {
+        if (multiSelect) {
+            if (selectedUsers.length === 0) return 'Selecione as pessoas...';
+            if (selectedUsers.length === 1) return selectedUsers[0].name;
+            return `${selectedUsers.length} pessoas selecionadas`;
+        }
+        return selectedUser ? selectedUser.name : 'Selecione um amigo...';
+    };
 
     return (
         <View>
@@ -28,14 +69,22 @@ export const UserSelector: React.FC<UserSelectorProps> = ({ users, onSelect, sel
                 onPress={() => setModalVisible(true)}
             >
                 <Text style={styles.selectorText}>
-                    {selectedUser ? selectedUser.name : 'Selecione um amigo...'}
+                    {getDisplayText()}
                 </Text>
             </TouchableOpacity>
 
             <Modal visible={modalVisible} animationType="slide" transparent={true}>
                 <View style={styles.modalContainer}>
                     <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Selecione um Amigo</Text>
+                        <View style={styles.modalHeaderRow}>
+                            <Text style={styles.modalTitle}>
+                                {multiSelect ? 'Selecione as Pessoas' : 'Selecione um Amigo'}
+                            </Text>
+                            {multiSelect && (
+                                <Text style={styles.countText}>{tempSelectedUsers.length} selecionados</Text>
+                            )}
+                        </View>
+
                         <TextInput
                             style={styles.searchInput}
                             placeholder="Buscar..."
@@ -46,26 +95,50 @@ export const UserSelector: React.FC<UserSelectorProps> = ({ users, onSelect, sel
                         <FlatList
                             data={filteredUsers}
                             keyExtractor={item => item.id}
-                            renderItem={({ item }) => (
-                                <TouchableOpacity
-                                    style={styles.userItem}
-                                    onPress={() => {
-                                        onSelect(item);
-                                        setModalVisible(false);
-                                    }}
-                                >
-                                    <Text style={styles.userName}>{item.name}</Text>
-                                    <Text style={styles.userEmail}>{item.email}</Text>
-                                </TouchableOpacity>
-                            )}
+                            renderItem={({ item }) => {
+                                const isSelected = multiSelect
+                                    ? !!tempSelectedUsers.find(u => u.id === item.id)
+                                    : selectedUser?.id === item.id;
+
+                                return (
+                                    <TouchableOpacity
+                                        style={[styles.userItem, isSelected && styles.userItemSelected]}
+                                        onPress={() => {
+                                            if (multiSelect) {
+                                                toggleUser(item);
+                                            } else {
+                                                onSelect(item);
+                                                setModalVisible(false);
+                                            }
+                                        }}
+                                    >
+                                        <View>
+                                            <Text style={[styles.userName, isSelected && { color: COLORS.primary }]}>{item.name}</Text>
+                                            <Text style={styles.userEmail}>{item.email}</Text>
+                                        </View>
+                                        {isSelected && <Text style={{ color: COLORS.primary, fontWeight: 'bold' }}>✓</Text>}
+                                    </TouchableOpacity>
+                                );
+                            }}
                         />
 
-                        <TouchableOpacity
-                            style={styles.closeButton}
-                            onPress={() => setModalVisible(false)}
-                        >
-                            <Text style={styles.closeButtonText}>Cancelar</Text>
-                        </TouchableOpacity>
+                        <View style={styles.footerButtons}>
+                            <TouchableOpacity
+                                style={[styles.closeButton, styles.cancelButton]}
+                                onPress={() => setModalVisible(false)}
+                            >
+                                <Text style={styles.cancelButtonText}>Cancelar</Text>
+                            </TouchableOpacity>
+
+                            {multiSelect && (
+                                <TouchableOpacity
+                                    style={[styles.closeButton, styles.confirmButton]}
+                                    onPress={handleConfirm}
+                                >
+                                    <Text style={styles.confirmButtonText}>Confirmar</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
                     </View>
                 </View>
             </Modal>
@@ -93,9 +166,16 @@ const styles = StyleSheet.create({
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
         padding: 20,
-        height: '70%',
+        height: '80%',
     },
-    modalTitle: { color: COLORS.text, fontSize: 20, fontWeight: 'bold', marginBottom: 16 },
+    modalHeaderRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    modalTitle: { color: COLORS.text, fontSize: 20, fontWeight: 'bold' },
+    countText: { color: COLORS.primary, fontWeight: 'bold' },
     searchInput: {
         backgroundColor: COLORS.surface,
         padding: 12,
@@ -107,15 +187,32 @@ const styles = StyleSheet.create({
         padding: 16,
         borderBottomWidth: 1,
         borderBottomColor: COLORS.surfaceLight,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    userItemSelected: {
+        backgroundColor: COLORS.primary + '10',
     },
     userName: { color: COLORS.text, fontSize: 16, fontWeight: 'bold' },
     userEmail: { color: COLORS.textSecondary, fontSize: 14 },
-    closeButton: {
+    footerButtons: {
+        flexDirection: 'row',
+        gap: 12,
         marginTop: 16,
+    },
+    closeButton: {
+        flex: 1,
         padding: 16,
-        backgroundColor: COLORS.surface,
         borderRadius: 8,
         alignItems: 'center',
     },
-    closeButtonText: { color: COLORS.error, fontWeight: 'bold', fontSize: 16 },
+    cancelButton: {
+        backgroundColor: COLORS.surface,
+    },
+    confirmButton: {
+        backgroundColor: COLORS.primary,
+    },
+    cancelButtonText: { color: COLORS.textSecondary, fontWeight: 'bold', fontSize: 16 },
+    confirmButtonText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
 });

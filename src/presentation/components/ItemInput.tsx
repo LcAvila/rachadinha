@@ -7,20 +7,28 @@ import { formatCurrencyInput, parseCurrencyInput } from '../../core/utils/curren
 
 interface ItemInputProps {
     users: User[];
-    onAdd: (userId: string, userName: string, description: string, amount: number) => void;
+    onAdd: (assignedUsers: { userId: string, userName: string }[], description: string, unitPrice: number, quantity: number) => void;
 }
 
 export const ItemInput: React.FC<ItemInputProps> = ({ users, onAdd }) => {
-    const [selectedUser, setSelectedUser] = useState<User | undefined>(undefined);
+    const [selectedUsers, setSelectedUsers] = useState<User[]>([]);
     const [description, setDescription] = useState('');
     const [amount, setAmount] = useState('');
+    const [quantity, setQuantity] = useState('1');
 
     const handleAdd = () => {
-        if (selectedUser && description && amount) {
-            onAdd(selectedUser.id, selectedUser.name, description, parseCurrencyInput(amount));
+        if (selectedUsers.length > 0 && description && amount && quantity) {
+            const unitPrice = parseCurrencyInput(amount);
+            const qty = parseInt(quantity) || 1;
+
+            const assigned = selectedUsers.map(u => ({ userId: u.id, userName: u.name }));
+
+            onAdd(assigned, description, unitPrice, qty);
+
             setDescription('');
             setAmount('');
-            setSelectedUser(undefined);
+            setQuantity('1');
+            setSelectedUsers([]);
         }
     };
 
@@ -30,11 +38,25 @@ export const ItemInput: React.FC<ItemInputProps> = ({ users, onAdd }) => {
 
             <UserSelector
                 users={users}
-                selectedUser={selectedUser}
-                onSelect={setSelectedUser}
+                onSelect={() => { }} // Not used in multi mode
+                multiSelect={true}
+                selectedUsers={selectedUsers}
+                onMultiSelect={setSelectedUsers}
             />
 
             <View style={styles.row}>
+                <View style={{ flex: 0.8 }}>
+                    <Text style={styles.label}>Qtd</Text>
+                    <TextInput
+                        style={[styles.input, { textAlign: 'center' }]}
+                        placeholder="1"
+                        placeholderTextColor={COLORS.textSecondary}
+                        keyboardType="numeric"
+                        value={quantity}
+                        onChangeText={setQuantity}
+                    />
+                </View>
+
                 <View style={styles.flex2}>
                     <Text style={styles.label}>Item</Text>
                     <TextInput
@@ -45,8 +67,9 @@ export const ItemInput: React.FC<ItemInputProps> = ({ users, onAdd }) => {
                         onChangeText={setDescription}
                     />
                 </View>
+
                 <View style={styles.flex1}>
-                    <Text style={styles.label}>Valor</Text>
+                    <Text style={styles.label}>Valor Unit.</Text>
                     <TextInput
                         style={styles.input}
                         placeholder="R$ 0,00"
@@ -59,9 +82,9 @@ export const ItemInput: React.FC<ItemInputProps> = ({ users, onAdd }) => {
             </View>
 
             <TouchableOpacity
-                style={[styles.button, (!selectedUser || !description || !amount) && styles.disabled]}
+                style={[styles.button, (selectedUsers.length === 0 || !description || !amount) && styles.disabled]}
                 onPress={handleAdd}
-                disabled={!selectedUser || !description || !amount}
+                disabled={selectedUsers.length === 0 || !description || !amount}
             >
                 <Text style={styles.buttonText}>Adicionar Item</Text>
             </TouchableOpacity>
@@ -79,8 +102,8 @@ const styles = StyleSheet.create({
     header: { color: COLORS.text, fontSize: 18, fontWeight: 'bold', marginBottom: 16 },
     row: { flexDirection: 'row', gap: 12, marginTop: 12 },
     flex2: { flex: 2 },
-    flex1: { flex: 1 },
-    label: { color: COLORS.textSecondary, marginBottom: 8 },
+    flex1: { flex: 1.2 },
+    label: { color: COLORS.textSecondary, marginBottom: 8, fontSize: 12, fontWeight: '600' },
     input: {
         backgroundColor: COLORS.background,
         color: COLORS.text,

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming, Easing, runOnJS, interpolate, Extrapolate, createAnimatedPropAdapter, processColor } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator, TouchableOpacity, Platform, Image, Modal, KeyboardAvoidingView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator, TouchableOpacity, Platform, Image, Modal, KeyboardAvoidingView, TextInput } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
@@ -11,6 +11,8 @@ import { AddItemToExpenseUseCase } from '../../application/usecases/expenses/Add
 import { FinalizeExpenseUseCase } from '../../application/usecases/expenses/FinalizeExpenseUseCase';
 import { calculateProportionalAmounts, ProportionalCalculation } from '../../application/utils/CalculateProportionalAmounts';
 import { ItemInput } from '../components/ItemInput';
+import { UserSelector } from '../components/UserSelector';
+import { ScaleButton } from '../components/ScaleButton';
 import { User } from '../../domain/entities/User';
 import { Expense, ExpenseStatus } from '../../domain/entities/Expense';
 import { COLORS } from '../../core/constants/constants';
@@ -42,8 +44,13 @@ export const AddItemsScreen = () => {
     const [pendingStatus, setPendingStatus] = useState<ExpenseStatus | null>(null);
     const [showInvoiceModal, setShowInvoiceModal] = useState(false);
 
+    // Receiver & Settings
+    const [showSettingsModal, setShowSettingsModal] = useState(false);
+    const [tempReceiver, setTempReceiver] = useState<User | undefined>(undefined);
+
     const [toast, setToast] = useState({ visible: false, message: '', type: 'info' as 'success' | 'error' | 'info' });
     const celebrationRef = useRef<CelebrationHandle>(null);
+    const [showCelebration, setShowCelebration] = useState(false);
     const summaryProgress = useSharedValue(1); // 1 = fully open, 0 = fully closed
     const [isSummaryCollapsed, setIsSummaryCollapsed] = useState(false);
 
@@ -88,6 +95,10 @@ export const AddItemsScreen = () => {
 
             if (exp) {
                 updateCalculations(exp);
+                // Set initial receiver
+                const receiverId = exp.receiverId || exp.createdBy;
+                const receiver = allUsers.find(u => u.id === receiverId);
+                setTempReceiver(receiver);
             }
         } catch (e) {
             Alert.alert('Erro', 'Falha ao carregar dados');
@@ -110,15 +121,16 @@ export const AddItemsScreen = () => {
         setCalculations(calcs);
     };
 
-    const handleAddItem = async (userId: string, userName: string, description: string, amount: number) => {
+    const handleAddItem = async (assignedUsers: { userId: string, userName: string }[], description: string, unitPrice: number, quantity: number) => {
         if (!expense || expense.status === 'paid') return;
 
         try {
             const newItem = {
-                userId,
-                userName,
+                assignedTo: assignedUsers,
                 description,
-                amount,
+                unitPrice,
+                quantity,
+                amount: unitPrice * quantity,
                 notified: false
             };
 
@@ -144,12 +156,24 @@ export const AddItemsScreen = () => {
         setIsConfirmModalVisible(true);
     };
 
+    const triggerCelebration = () => {
+        setShowCelebration(true);
+        setTimeout(() => {
+            celebrationRef.current?.start();
+        }, 100);
+
+        // Hide after 5 seconds
+        setTimeout(() => {
+            setShowCelebration(false);
+        }, 5000);
+    };
+
     const executeFinalization = async () => {
         setFinalizing(true);
         try {
             await finalizeUseCase.execute(expenseId);
             setToast({ visible: true, message: 'Despesa finalizada com sucesso! 🚀', type: 'success' });
-            celebrationRef.current?.start();
+            triggerCelebration();
             setTimeout(() => {
                 navigation.navigate('Home');
             }, 1500);
@@ -174,11 +198,31 @@ export const AddItemsScreen = () => {
         try {
             await expenseRepo.updateExpense(expenseId, { status });
             if (status === 'paid') {
-                celebrationRef.current?.start();
+                triggerCelebration();
             }
-            loadData();
+            if (status === 'waiting_payment') {
+                setToast({ visible: true, message: 'Rachadinha salva com sucesso! 💾', type: 'success' });
+                setTimeout(() => {
+                    navigation.navigate('Home');
+                }, 1500);
+            } else {
+                loadData();
+            }
         } catch (e) {
             Alert.alert('Erro', 'Falha ao atualizar status');
+        }
+    };
+
+
+    const handleSaveSettings = async () => {
+        if (!expense || !tempReceiver) return;
+        try {
+            await expenseRepo.updateExpense(expenseId, { receiverId: tempReceiver.id });
+            setExpense({ ...expense, receiverId: tempReceiver.id });
+            setToast({ visible: true, message: 'Configurações salvas! ⚙️', type: 'success' });
+            setShowSettingsModal(false);
+        } catch (e) {
+            Alert.alert('Erro', 'Falha ao salvar configurações');
         }
     };
 
@@ -196,6 +240,11 @@ export const AddItemsScreen = () => {
     const itemsTotal = expense.items ? expense.items.reduce((acc, item) => acc + item.amount, 0) : 0;
     const currentTotal = itemsTotal + expense.deliveryFee + expense.serviceFee - expense.discount;
 
+    // Determine who receives
+    const receiverId = expense.receiverId || expense.createdBy;
+    const receiver = users.find(u => u.id === receiverId);
+    const receiverName = receiver ? receiver.name : expense.createdByName;
+
     return (
         <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
             <KeyboardAvoidingView
@@ -211,9 +260,22 @@ export const AddItemsScreen = () => {
                             </TouchableOpacity>
                             <Text style={[styles.title, { flex: 1 }]} numberOfLines={1}>{expense.title}</Text>
                         </View>
-                        <TouchableOpacity onPress={() => !isPaid && setIsStatusModalVisible(true)} disabled={isPaid}>
-                            <StatusBadge status={expense.status} />
-                        </TouchableOpacity>
+                        <View style={{ flexDirection: 'row', gap: 12 }}>
+                            <TouchableOpacity onPress={() => setShowSettingsModal(true)}>
+                                <Ionicons name="settings-outline" size={22} color={COLORS.text} />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => !isPaid && setIsStatusModalVisible(true)} disabled={isPaid}>
+                                <StatusBadge status={expense.status} />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    {/* Receiver Info Banner */}
+                    <View style={styles.receiverBanner}>
+                        <Ionicons name="wallet-outline" size={18} color={COLORS.primary} />
+                        <Text style={styles.receiverText}>
+                            Valor a receber vai para: <Text style={{ fontWeight: 'bold' }}>{receiverName}</Text>
+                        </Text>
                     </View>
 
                     {isPaid && (
@@ -297,29 +359,37 @@ export const AddItemsScreen = () => {
                             <Ionicons name="list-outline" size={20} color={COLORS.text} />
                             <Text style={styles.sectionTitle}>Itens Individuais</Text>
                         </View>
-                        {expense.items && expense.items.map((item, index) => (
-                            <View key={index} style={styles.itemRow}>
-                                <View style={styles.itemInfo}>
-                                    <Text style={styles.itemDesc}>{item.description}</Text>
-                                    <Text style={styles.itemUser}>por {item.userName}</Text>
+                        {expense.items && expense.items.map((item, index) => {
+                            const isMulti = item.assignedTo && item.assignedTo.length > 1;
+                            const assignedNames = item.assignedTo ? item.assignedTo.map(u => u.userName.split(' ')[0]).join(', ') : item.userName;
+                            const qty = item.quantity || 1;
+
+                            return (
+                                <View key={index} style={styles.itemRow}>
+                                    <View style={styles.itemInfo}>
+                                        <Text style={styles.itemDesc}>{qty}x {item.description}</Text>
+                                        <Text style={styles.itemUser}>
+                                            {isMulti ? `Dividido: ${assignedNames}` : `por ${assignedNames}`}
+                                        </Text>
+                                    </View>
+                                    <Text style={styles.itemAmount}>{formatCurrency(item.amount)}</Text>
                                 </View>
-                                <Text style={styles.itemAmount}>{formatCurrency(item.amount)}</Text>
-                            </View>
-                        ))}
+                            );
+                        })}
                     </View>
 
                     {!isPaid && (
                         <View style={styles.buttonRow}>
-                            <TouchableOpacity
+                            <ScaleButton
                                 style={[styles.actionButton, styles.saveButton]}
                                 onPress={() => navigation.navigate('Home')}
                                 disabled={finalizing}
                             >
                                 <Text style={[styles.buttonText, styles.saveButtonText]}>Voltar</Text>
-                            </TouchableOpacity>
+                            </ScaleButton>
 
                             {(expense.status === 'draft' || expense.status === 'waiting_payment') && (
-                                <TouchableOpacity
+                                <ScaleButton
                                     style={[styles.actionButton, styles.finalizeButton, { opacity: finalizing ? 0.7 : 1 }]}
                                     onPress={handleFinalize}
                                     disabled={finalizing}
@@ -329,31 +399,60 @@ export const AddItemsScreen = () => {
                                     ) : (
                                         <Text style={styles.buttonText}>Finalizar</Text>
                                     )}
-                                </TouchableOpacity>
+                                </ScaleButton>
                             )}
 
-                            <TouchableOpacity
+                            <ScaleButton
                                 style={[styles.actionButton, styles.saveButton]}
                                 onPress={() => updateStatus('waiting_payment')}
                             >
                                 <Text style={[styles.buttonText, styles.saveButtonText]}>Salvar</Text>
-                            </TouchableOpacity>
+                            </ScaleButton>
                         </View>
                     )}
 
                     {isPaid && (
                         <View style={styles.buttonRow}>
-                            <TouchableOpacity
+                            <ScaleButton
                                 style={[styles.actionButton, styles.finalizeButton]}
                                 onPress={() => navigation.navigate('Home')}
                             >
                                 <Text style={styles.buttonText}>Voltar para Home</Text>
-                            </TouchableOpacity>
+                            </ScaleButton>
                         </View>
                     )}
 
                 </ScrollView >
             </KeyboardAvoidingView>
+
+            {/* Modal for Settings (Receiver) */}
+            <Modal visible={showSettingsModal} transparent animationType="slide">
+                <View style={styles.modalOverlay}>
+                    <View style={styles.settingsModalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Configurações</Text>
+                            <TouchableOpacity onPress={() => setShowSettingsModal(false)}>
+                                <Ionicons name="close" size={26} color={COLORS.text} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <Text style={styles.sectionTitleSmall}>Quem vai receber?</Text>
+                        <Text style={styles.helperText}>Escolha quem pagou a conta e deve receber os valores.</Text>
+
+                        <View style={{ height: 100, marginTop: 10 }}>
+                            <UserSelector
+                                users={users}
+                                selectedUser={tempReceiver}
+                                onSelect={setTempReceiver}
+                            />
+                        </View>
+
+                        <TouchableOpacity style={styles.saveSettingsBtn} onPress={handleSaveSettings}>
+                            <Text style={styles.saveSettingsText}>Salvar Alterações</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
 
             <CustomConfirmModal
                 visible={isConfirmModalVisible}
@@ -415,7 +514,7 @@ export const AddItemsScreen = () => {
                 type={toast.type}
                 onHide={() => setToast({ ...toast, visible: false })}
             />
-            <Celebration ref={celebrationRef} />
+            {showCelebration && <Celebration ref={celebrationRef} />}
         </View>
     );
 };
@@ -427,9 +526,25 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 20,
+        marginBottom: 10,
     },
     title: { fontSize: 26, fontWeight: '800', color: COLORS.text },
+    receiverBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: COLORS.primary + '10',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 8,
+        marginBottom: 20,
+        alignSelf: 'flex-start',
+    },
+    receiverText: {
+        fontSize: 13,
+        color: COLORS.primary,
+        fontWeight: '500',
+    },
     summaryBox: {
         backgroundColor: '#FFF',
         padding: 20,
@@ -596,7 +711,7 @@ const styles = StyleSheet.create({
     },
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.8)',
+        backgroundColor: 'rgba(0,0,0,0.5)',
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -606,6 +721,12 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFF',
         borderRadius: 16,
         padding: 20,
+    },
+    settingsModalContent: {
+        width: '85%',
+        backgroundColor: '#FFF',
+        borderRadius: 20,
+        padding: 24,
     },
     modalHeader: {
         flexDirection: 'row',
@@ -617,6 +738,29 @@ const styles = StyleSheet.create({
         fontSize: 20,
         fontWeight: '900',
         color: COLORS.text,
+    },
+    sectionTitleSmall: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: COLORS.text,
+        marginBottom: 4,
+    },
+    helperText: {
+        fontSize: 13,
+        color: COLORS.textSecondary,
+        marginBottom: 16,
+    },
+    saveSettingsBtn: {
+        backgroundColor: COLORS.primary,
+        padding: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+        marginTop: 20,
+    },
+    saveSettingsText: {
+        color: '#FFF',
+        fontWeight: 'bold',
+        fontSize: 16,
     },
     fullInvoiceImage: {
         flex: 1,

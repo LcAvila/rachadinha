@@ -62,11 +62,20 @@ export class ExpenseRepository implements IExpenseRepository {
 
     async addItemToExpense(expenseId: string, item: ExpenseItem): Promise<void> {
         const docRef = doc(db, FIREBASE_COLLECTIONS.EXPENSES, expenseId);
-        await updateDoc(docRef, {
-            items: arrayUnion(item),
-            involvedUserIds: arrayUnion(item.userId),
-            totalAmount: increment(item.amount)
-        });
+
+        // Extract all involved User IDs from the assignedTo array
+        // Fallback to item.userId for backward compatibility if assignedTo is missing
+        const newInvolvedIds = item.assignedTo
+            ? item.assignedTo.map(u => u.userId)
+            : (item.userId ? [item.userId] : []);
+
+        if (newInvolvedIds.length > 0) {
+            await updateDoc(docRef, {
+                items: arrayUnion(item),
+                involvedUserIds: arrayUnion(...newInvolvedIds),
+                totalAmount: increment(item.amount)
+            });
+        }
     }
 
     async finalizeExpense(expenseId: string): Promise<void> {

@@ -21,11 +21,28 @@ export const calculateProportionalAmounts = (
     const userSubtotals = new Map<string, { name: string; subtotal: number }>();
 
     items.forEach((item) => {
-        const current = userSubtotals.get(item.userId) || { name: item.userName, subtotal: 0 };
-        userSubtotals.set(item.userId, {
-            name: item.userName,
-            subtotal: current.subtotal + item.amount,
-        });
+        // Handle legacy single-user items
+        if (item.userId && (!item.assignedTo || item.assignedTo.length === 0)) {
+            const current = userSubtotals.get(item.userId) || { name: item.userName || 'Unknown', subtotal: 0 };
+            userSubtotals.set(item.userId, {
+                name: current.name,
+                subtotal: current.subtotal + item.amount,
+            });
+            return;
+        }
+
+        // Handle new multi-user items
+        if (item.assignedTo && item.assignedTo.length > 0) {
+            const amountPerPerson = item.amount / item.assignedTo.length;
+
+            item.assignedTo.forEach(assignee => {
+                const current = userSubtotals.get(assignee.userId) || { name: assignee.userName, subtotal: 0 };
+                userSubtotals.set(assignee.userId, {
+                    name: current.name,
+                    subtotal: current.subtotal + amountPerPerson,
+                });
+            });
+        }
     });
 
     // Calculate total of all items

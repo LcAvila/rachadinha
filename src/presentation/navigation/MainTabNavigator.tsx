@@ -18,12 +18,23 @@ const TabBarIcon = ({ name, focused }: { name: any; focused: boolean }) => (
     </View>
 );
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 export const MainTabNavigator = () => {
+    const insets = useSafeAreaInsets();
+
     return (
         <Tab.Navigator
             screenOptions={{
                 headerShown: false,
-                tabBarStyle: styles.tabBar,
+                tabBarStyle: {
+                    ...styles.tabBar,
+                    // AUTO HEIGHT allows the container to grow to fit the text labels
+                    height: undefined,
+                    minHeight: 90, // Keeps it looking big/premium
+                    paddingBottom: insets.bottom + 16, // Generous safe area
+                    paddingTop: 16,
+                },
                 tabBarShowLabel: true,
                 tabBarActiveTintColor: COLORS.primary,
                 tabBarInactiveTintColor: COLORS.textSecondary,
@@ -61,8 +72,8 @@ export const MainTabNavigator = () => {
                 name="Financial"
                 component={FinancialScreen}
                 options={{
-                    tabBarLabel: 'Financeiro',
-                    tabBarIcon: ({ focused }) => <TabBarIcon name="pie-chart-outline" focused={focused} />,
+                    tabBarLabel: 'Relatório',
+                    tabBarIcon: ({ focused }) => <TabBarIcon name="stats-chart-outline" focused={focused} />,
                 }}
             />
         </Tab.Navigator>
@@ -74,9 +85,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFF',
         borderTopWidth: 0,
         elevation: 20,
-        height: Platform.OS === 'ios' ? 95 : 75,
-        paddingBottom: Platform.OS === 'ios' ? 30 : 12,
-        paddingTop: 12,
+        // height/padding handled dynamically
         borderTopLeftRadius: 30,
         borderTopRightRadius: 30,
         shadowColor: "#000",

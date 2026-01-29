@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, StatusBar, Platform } from 'react-native';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -14,6 +14,8 @@ import { Ionicons } from '@expo/vector-icons';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, FadeInDown } from 'react-native-reanimated';
 import { StatusBadge } from '../components/StatusBadge';
 import { Dashboard } from '../components/Dashboard';
+import { ExpenseCard } from '../components/ExpenseCard';
+import { ScaleButton } from '../components/ScaleButton';
 import { NotificationRepository } from '../../infrastructure/firebase/NotificationRepository';
 
 type HomeScreenProp = StackNavigationProp<RootStackParamList, 'Home'>;
@@ -124,42 +126,12 @@ export const HomeScreen = () => {
     };
 
     const renderExpenseItem = ({ item, index }: { item: Expense; index: number }) => {
-        const itemsTotal = item.items ? item.items.reduce((acc, i) => acc + i.amount, 0) : 0;
-        const currentTotal = itemsTotal + (item.deliveryFee || 0) + (item.serviceFee || 0) - (item.discount || 0);
-
         return (
-            <Animated.View entering={FadeInDown.delay(index * 100).springify()}>
-                <TouchableOpacity
-                    style={styles.expenseCard}
-                    onPress={() => {
-                        navigation.navigate('AddItems', { expenseId: item.id });
-                    }}
-                    activeOpacity={0.7}
-                >
-                    <View style={[styles.cardIcon, { backgroundColor: getStatusColor(item.status) + '15' }]}>
-                        <Ionicons
-                            name={item.status === 'draft' ? "document-text-outline" : item.status === 'paid' ? "checkmark-done-circle" : "hourglass-outline"}
-                            size={26}
-                            color={getStatusColor(item.status)}
-                        />
-                    </View>
-                    <View style={styles.cardInfo}>
-                        <Text style={styles.cardTitle}>{item.title}</Text>
-                        <View style={styles.cardStatusRow}>
-                            <View style={styles.cardDetails}>
-                                <Text style={styles.cardAmount}>
-                                    {formatCurrency(currentTotal)}
-                                </Text>
-                                <Text style={styles.cardItemCount}>{item.items?.length || 0} itens</Text>
-                            </View>
-                            <StatusBadge status={item.status} />
-                        </View>
-                    </View>
-                    <View style={styles.cardArrow}>
-                        <Ionicons name="chevron-forward" size={20} color="#CBD5E0" />
-                    </View>
-                </TouchableOpacity>
-            </Animated.View>
+            <ExpenseCard
+                expense={item}
+                index={index}
+                onPress={() => navigation.navigate('AddItems', { expenseId: item.id })}
+            />
         );
     };
 
@@ -210,10 +182,10 @@ export const HomeScreen = () => {
             </View>
 
             {/* Speed Dial Menu */}
-            <View style={styles.bottomBar}>
+            <View style={[styles.bottomBar, { bottom: 100 + insets.bottom }]}>
                 {menuOpen && (
-                    <View style={styles.menuContainer}>
-                        <TouchableOpacity
+                    <Animated.View entering={FadeInDown.springify()} style={styles.menuContainer}>
+                        <ScaleButton
                             style={styles.subFab}
                             onPress={() => { toggleMenu(); navigation.navigate('CreateGroup'); }}
                         >
@@ -223,9 +195,9 @@ export const HomeScreen = () => {
                             <View style={styles.subFabButton}>
                                 <Ionicons name="people" size={24} color={COLORS.primary} />
                             </View>
-                        </TouchableOpacity>
+                        </ScaleButton>
 
-                        <TouchableOpacity
+                        <ScaleButton
                             style={styles.subFab}
                             onPress={() => { toggleMenu(); navigation.navigate('CreateExpense'); }}
                         >
@@ -235,17 +207,16 @@ export const HomeScreen = () => {
                             <View style={styles.subFabButton}>
                                 <Ionicons name="receipt" size={24} color={COLORS.primary} />
                             </View>
-                        </TouchableOpacity>
-                    </View>
+                        </ScaleButton>
+                    </Animated.View>
                 )}
 
-                <TouchableOpacity
+                <ScaleButton
                     style={[styles.fab, menuOpen ? styles.fabOpen : null]}
                     onPress={toggleMenu}
-                    activeOpacity={0.9}
                 >
                     <Ionicons name={menuOpen ? "close" : "add"} size={32} color={menuOpen ? COLORS.text : "#FFF"} />
-                </TouchableOpacity>
+                </ScaleButton>
             </View>
         </View>
     );
@@ -256,7 +227,7 @@ const styles = StyleSheet.create({
     header: {
         backgroundColor: COLORS.primary,
         // paddingTop dynamic
-        paddingBottom: 20,
+        paddingBottom: 24,
         paddingHorizontal: 24,
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -408,8 +379,8 @@ const styles = StyleSheet.create({
     },
     bottomBar: {
         position: 'absolute',
-        bottom: 30, // Can be adjusted with insets if needed, but absolute 30 is usually okay above tab bar
-        right: 30,
+        bottom: (Platform.OS === 'ios' ? 110 : 90) + (Platform.OS === 'android' ? 20 : 0), // Base + safety margin
+        right: 24,
         alignItems: 'flex-end',
     },
     menuContainer: {

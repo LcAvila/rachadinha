@@ -12,6 +12,7 @@ export interface Expense {
     serviceFee: number;
     discount: number;
     status: ExpenseStatus;
+    receiverId?: string; // ID of the user who receives the payment (defaults to createdBy)
     invoiceUrl?: string | null;
     finalizedAt?: Date;
     createdAt: Date;
