@@ -12,14 +12,27 @@ import { Toast } from '../components/Toast';
 import { ChangePasswordModal } from '../components/ChangePasswordModal';
 import { AnimatedButton } from '../components/AnimatedButton';
 
+/**
+ * @component ProfileScreen
+ * Tela de perfil do usuário.
+ * Permite:
+ * - Visualizar informações do usuário.
+ * - Editar perfil (foto, apelido, username, bio).
+ * - Alterar senha.
+ * - Fazer logout.
+ */
 export const ProfileScreen = () => {
     const navigation = useNavigation<any>();
     const insets = useSafeAreaInsets();
+
+    // Estados do Usuário e Edição
     const [user, setUser] = useState<User | null>(null);
     const [isEditing, setIsEditing] = useState(false);
     const [nickname, setNickname] = useState('');
     const [username, setUsername] = useState('');
     const [bio, setBio] = useState('');
+
+    // Estados de UI e Processamento
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -39,6 +52,9 @@ export const ProfileScreen = () => {
         setBio(currentUser?.bio || '');
     };
 
+    /**
+     * Permite selecionar uma imagem da galeria e fazer upload para o perfil.
+     */
     const pickImage = async () => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
@@ -63,21 +79,21 @@ export const ProfileScreen = () => {
 
             const selectedImage = result.assets[0];
 
-            // Show image immediately (local URI)
+            // Feedback imediato (mostra foto local enquanto sobe)
             setUser({ ...user, photoUrl: selectedImage.uri });
             setUploading(true);
 
             try {
-                // Upload to Firebase
+                // Upload para Firebase
                 const photoUrl = await authRepo.uploadProfilePhoto(user.id, selectedImage.uri);
                 await authRepo.updateProfile(user.id, { photoUrl });
 
-                // Update with Firebase URL
+                // Atualiza com URL remota
                 setUser({ ...user, photoUrl });
                 setToast({ visible: true, message: 'Foto atualizada com sucesso! 📸', type: 'success' });
             } catch (uploadError) {
                 console.error('Upload error:', uploadError);
-                // Revert to previous photo on error
+                // Reverte em caso de erro
                 await loadUser();
                 setToast({ visible: true, message: 'Erro ao fazer upload da foto. Tente novamente.', type: 'error' });
             } finally {
@@ -89,11 +105,14 @@ export const ProfileScreen = () => {
         }
     };
 
+    /**
+     * Salva as alterações do perfil (apelido, username, bio).
+     */
     const handleSave = async () => {
         if (!user) return;
         setLoading(true);
         try {
-            // Check if username is being set/changed and if it's available
+            // Verifica disponibilidade do username se foi alterado
             if (username && username !== user.username) {
                 const isAvailable = await authRepo.checkUsernameAvailability(username);
                 if (!isAvailable) {
@@ -134,7 +153,6 @@ export const ProfileScreen = () => {
             </View>
         );
     }
-
 
     return (
         <View style={styles.container}>
@@ -247,6 +265,7 @@ export const ProfileScreen = () => {
                     )}
                 </View>
 
+                {/* Menu de Opções */}
                 <View style={styles.menu}>
                     <TouchableOpacity style={styles.menuItem} onPress={() => setShowPasswordModal(true)}>
                         <View style={[styles.menuIcon, { backgroundColor: COLORS.primary + '10' }]}>
@@ -297,7 +316,6 @@ const styles = StyleSheet.create({
     },
     backButton: {
         position: 'absolute',
-        // top: 50, dynamic
         left: 20,
         zIndex: 10,
         width: 40,
@@ -317,7 +335,6 @@ const styles = StyleSheet.create({
     },
     header: {
         alignItems: 'center',
-        // paddingTop: 60, dynamic
         paddingBottom: 32,
         backgroundColor: '#FFF',
         borderBottomLeftRadius: 32,

@@ -19,8 +19,13 @@ import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { NotificationRepository } from '../../infrastructure/firebase/NotificationRepository';
 import { AuthRepository } from '../../infrastructure/firebase/AuthRepository';
 
+// Cria a Stack Navigator tipada
 const Stack = createStackNavigator<RootStackParamList>();
 
+/**
+ * Configurações de transição de tela personalizadas.
+ * Define animações suaves (Slide e Opacidade) similares ao iOS.
+ */
 const screenOptions = {
     headerShown: false,
     ...TransitionPresets.SlideFromRightIOS,
@@ -40,6 +45,7 @@ const screenOptions = {
             },
         },
     },
+    // Interpolador de estilo para criar o efeito de slide com fade
     cardStyleInterpolator: ({ current, layouts }: any) => {
         return {
             cardStyle: {
@@ -60,9 +66,15 @@ const screenOptions = {
     },
 };
 
+/**
+ * @component AppNavigator
+ * Componente raiz de navegação da aplicação.
+ * Gerencia o estado de autenticação e decide qual fluxo exibir (Login ou Principal).
+ */
 export const AppNavigator = () => {
     const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
+    // Efeito para monitorar o estado de autenticação do Firebase
     useEffect(() => {
         const notifRepo = new NotificationRepository();
         const authRepo = new AuthRepository();
@@ -71,7 +83,7 @@ export const AppNavigator = () => {
             setIsAuthenticated(!!user);
 
             if (user) {
-                // Register push token
+                // Ao autenticar, registra o token de push notification
                 const token = await notifRepo.registerForPushNotifications();
                 if (token) {
                     await authRepo.updatePushToken(user.uid, token);
@@ -81,14 +93,16 @@ export const AppNavigator = () => {
         return unsubscribe;
     }, []);
 
+    // Exibe nada (ou Splash Screen nativa) enquanto verifica a sessão
     if (isAuthenticated === null) {
-        return null; // Splash screen
+        return null;
     }
 
     return (
         <NavigationContainer documentTitle={{ formatter: () => 'Rachadinha' }}>
             <Stack.Navigator screenOptions={screenOptions}>
                 {!isAuthenticated ? (
+                    // Fluxo de Não-Autenticado
                     <Stack.Screen
                         name="Login"
                         component={LoginScreen}
@@ -97,6 +111,7 @@ export const AppNavigator = () => {
                         }}
                     />
                 ) : (
+                    // Fluxo Autenticado
                     <>
                         <Stack.Screen
                             name="Home"

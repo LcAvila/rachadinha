@@ -5,9 +5,14 @@ import { FinancialScreen } from '../screens/FinancialScreen';
 import { COLORS } from '../../core/constants/constants';
 import { Ionicons } from '@expo/vector-icons';
 import { View, StyleSheet, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const Tab = createBottomTabNavigator();
 
+/**
+ * Componente auxiliar para renderizar os ícones da TabBar.
+ * Adiciona um fundo colorido quando ativo para destaque visual.
+ */
 const TabBarIcon = ({ name, focused }: { name: any; focused: boolean }) => (
     <View style={[styles.iconContainer, focused && styles.iconActive]}>
         <Ionicons
@@ -18,8 +23,11 @@ const TabBarIcon = ({ name, focused }: { name: any; focused: boolean }) => (
     </View>
 );
 
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
+/**
+ * @component MainTabNavigator
+ * Navegador de abas inferior principal.
+ * Contém as telas principais: Rascunhos, Aguardando, Finalizados e Relatório Financeiro.
+ */
 export const MainTabNavigator = () => {
     const insets = useSafeAreaInsets();
 
@@ -29,10 +37,10 @@ export const MainTabNavigator = () => {
                 headerShown: false,
                 tabBarStyle: {
                     ...styles.tabBar,
-                    // AUTO HEIGHT allows the container to grow to fit the text labels
+                    // Altura automática mas com mínimo definido para aparência premium
                     height: undefined,
-                    minHeight: 90, // Keeps it looking big/premium
-                    paddingBottom: insets.bottom + 16, // Generous safe area
+                    minHeight: 90,
+                    paddingBottom: insets.bottom + 16, // Garante área segura inferior generosa
                     paddingTop: 16,
                 },
                 tabBarShowLabel: true,
@@ -85,7 +93,6 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFF',
         borderTopWidth: 0,
         elevation: 20,
-        // height/padding handled dynamically
         borderTopLeftRadius: 30,
         borderTopRightRadius: 30,
         shadowColor: "#000",

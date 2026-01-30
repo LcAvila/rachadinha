@@ -4,11 +4,24 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../core/constants/constants';
 import { ExpenseStatus } from '../../domain/entities/Expense';
 
+/**
+ * Interface para as propriedades do StatusBadge.
+ */
 interface StatusBadgeProps {
+    /** Status atual da despesa, que define o rótulo, ícone e cores do badge */
     status: ExpenseStatus;
 }
 
+/**
+ * @component StatusBadge
+ * Um selo (badge) visual que indica o estado atual de uma despesa.
+ * Suporta estados: Rascunho, Pendente (aguardando pagamento) e Pago.
+ * Adapta automaticamente cores de fundo, texto e ícone de acordo com o status.
+ */
 export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
+    /**
+     * Retorna a configuração visual (rótulo, cores, ícone) com base no status.
+     */
     const getConfig = (status: ExpenseStatus) => {
         switch (status) {
             case 'draft':
@@ -58,7 +71,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 10,
         paddingVertical: 4,
-        borderRadius: 99,
+        borderRadius: 99, // Arredondado estilo pílula
         alignSelf: 'flex-start',
     },
     icon: {

@@ -1,18 +1,26 @@
-
 import React from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, FlatList, Dimensions } from 'react-native';
 import { COLORS } from '../../core/constants/constants';
 import { Ionicons } from '@expo/vector-icons';
 
+/**
+ * Interface para as propriedades do EmojiPickerModal.
+ */
 interface EmojiPickerModalProps {
+    /** Se verdadeiro, o modal está visível */
     visible: boolean;
+    /** Função chamada para fechar o modal */
     onClose: () => void;
+    /** Função chamada quando um emoji é selecionado */
     onSelect: (emoji: string) => void;
 }
 
+/**
+ * Lista de emojis disponíveis para seleção em grupos/despesas.
+ */
 const EMOJIS = [
     '🏠', '🏢', '✈️', '🏖️', '🎁', '🎉', '🍕', '🍔', '🍻', '🍷',
-    '⚽', '🏀', '🎮', '🎲', '🚗', '💰', '💡', '📚', '💼', '🛒',
+    '⚽', '🏀', '🎮', '🎲', '🚗', '💰', '💡', '📚', '💼', '📅',
     '💳', '🧾', '📅', '🤝', '👨‍👩‍👧‍👦', '👫', '🐾', '❤️', '⭐', '🔥'
 ];
 
@@ -20,11 +28,18 @@ const { width } = Dimensions.get('window');
 const COLUMN_COUNT = 6;
 const ITEM_SIZE = width / COLUMN_COUNT;
 
+/**
+ * @component EmojiPickerModal
+ * Um seletor simples de emojis exibido em um modal com scroll (FlatList).
+ * Permite ao usuário escolher um ícone representativo para um grupo ou despesa.
+ * É renderizado deslizando de baixo para cima (animação 'slide').
+ */
 export const EmojiPickerModal: React.FC<EmojiPickerModalProps> = ({ visible, onClose, onSelect }) => {
     return (
         <Modal visible={visible} transparent animationType="slide">
             <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
                 <View style={styles.content}>
+                    {/* Cabeçalho do Modal */}
                     <View style={styles.header}>
                         <Text style={styles.title}>Escolha um ícone</Text>
                         <TouchableOpacity onPress={onClose}>
@@ -32,9 +47,10 @@ export const EmojiPickerModal: React.FC<EmojiPickerModalProps> = ({ visible, onC
                         </TouchableOpacity>
                     </View>
 
+                    {/* Grade de Emojis */}
                     <FlatList
                         data={EMOJIS}
-                        keyExtractor={(item) => item}
+                        keyExtractor={(item, index) => `${item}-${index}`}
                         numColumns={COLUMN_COUNT}
                         renderItem={({ item }) => (
                             <TouchableOpacity
@@ -85,7 +101,7 @@ const styles = StyleSheet.create({
         padding: 10,
     },
     emojiItem: {
-        width: ITEM_SIZE - 4, // modest adjustment for padding
+        width: ITEM_SIZE - 4,
         height: ITEM_SIZE - 4,
         justifyContent: 'center',
         alignItems: 'center',

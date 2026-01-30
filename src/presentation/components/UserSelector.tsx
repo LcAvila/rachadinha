@@ -3,15 +3,30 @@ import { View, Text, TouchableOpacity, Modal, FlatList, TextInput, StyleSheet } 
 import { User } from '../../domain/entities/User';
 import { COLORS } from '../../core/constants/constants';
 
+/**
+ * Interface para as propriedades do UserSelector.
+ */
 interface UserSelectorProps {
+    /** Lista completa de usuários para seleção */
     users: User[];
+    /** Função chamada ao selecionar um único usuário (modo single) */
     onSelect: (user: User) => void;
+    /** Função chamada ao confirmar seleção múltipla (modo multi) */
     onMultiSelect?: (users: User[]) => void;
+    /** O usuário selecionado atualmente (modo single) */
     selectedUser?: User;
+    /** Lista de usuários selecionados atualmente (modo multi) */
     selectedUsers?: User[];
+    /** Se verdadeiro, permite selecionar múltiplas pessoas com confirmação */
     multiSelect?: boolean;
 }
 
+/**
+ * @component UserSelector
+ * Um seletor de usuários versátil que funciona em modo único ou múltiplo.
+ * Abre um modal com busca em tempo real e lista de amigos.
+ * No modo múltiplo, permite marcar vários itens antes de confirmar.
+ */
 export const UserSelector: React.FC<UserSelectorProps> = ({
     users,
     onSelect,
@@ -20,23 +35,30 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
     selectedUsers = [],
     onMultiSelect
 }) => {
+    // Estados internos
     const [modalVisible, setModalVisible] = useState(false);
     const [search, setSearch] = useState('');
     const [filteredUsers, setFilteredUsers] = useState(users);
+    // Estado temporário para multi-seleção antes da confirmação
     const [tempSelectedUsers, setTempSelectedUsers] = useState<User[]>(selectedUsers);
 
+    // Efeito para filtrar a lista conforme a busca
     useEffect(() => {
         setFilteredUsers(
             users.filter(u => u.name.toLowerCase().includes(search.toLowerCase()))
         );
     }, [search, users]);
 
+    // Sincroniza estado temporário ao abrir o modal em modo multi
     useEffect(() => {
         if (modalVisible && multiSelect) {
             setTempSelectedUsers(selectedUsers);
         }
     }, [modalVisible, multiSelect, selectedUsers]);
 
+    /**
+     * Adiciona ou remove um usuário da seleção temporária (modo multi).
+     */
     const toggleUser = (user: User) => {
         if (tempSelectedUsers.find(u => u.id === user.id)) {
             setTempSelectedUsers(tempSelectedUsers.filter(u => u.id !== user.id));
@@ -45,6 +67,9 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
         }
     };
 
+    /**
+     * Confirma a seleção e fecha o modal.
+     */
     const handleConfirm = () => {
         if (multiSelect && onMultiSelect) {
             onMultiSelect(tempSelectedUsers);
@@ -52,6 +77,9 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
         setModalVisible(false);
     };
 
+    /**
+     * Retorna o texto descritivo para o botão de gatilho do selector.
+     */
     const getDisplayText = () => {
         if (multiSelect) {
             if (selectedUsers.length === 0) return 'Selecione as pessoas...';
@@ -64,6 +92,8 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
     return (
         <View>
             <Text style={styles.label}>Para quem é este item?</Text>
+
+            {/* Gatilho para abrir o modal */}
             <TouchableOpacity
                 style={styles.selector}
                 onPress={() => setModalVisible(true)}
@@ -73,6 +103,7 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
                 </Text>
             </TouchableOpacity>
 
+            {/* Modal de Busca e Seleção */}
             <Modal visible={modalVisible} animationType="slide" transparent={true}>
                 <View style={styles.modalContainer}>
                     <View style={styles.modalContent}>
@@ -85,13 +116,16 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
                             )}
                         </View>
 
+                        {/* Campo de Busca */}
                         <TextInput
                             style={styles.searchInput}
-                            placeholder="Buscar..."
+                            placeholder="Buscar por nome..."
+                            placeholderTextColor={COLORS.textSecondary}
                             value={search}
                             onChangeText={setSearch}
                         />
 
+                        {/* Listagem de Usuários Encontrados */}
                         <FlatList
                             data={filteredUsers}
                             keyExtractor={item => item.id}
@@ -122,6 +156,7 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
                             }}
                         />
 
+                        {/* Botões de Ação no Rodapé */}
                         <View style={styles.footerButtons}>
                             <TouchableOpacity
                                 style={[styles.closeButton, styles.cancelButton]}

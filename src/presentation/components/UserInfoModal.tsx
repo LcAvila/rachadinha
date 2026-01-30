@@ -4,21 +4,37 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../core/constants/constants';
 import { User } from '../../domain/entities/User';
 
+/**
+ * Interface para as propriedades do UserInfoModal.
+ */
 interface UserInfoModalProps {
+    /** Controla a visibilidade do modal */
     visible: boolean;
+    /** Callback para fechar o modal */
     onClose: () => void;
+    /** Objeto do usuário cujas informações serão exibidas */
     user: User;
 }
 
+/**
+ * @component UserInfoModal
+ * Modal detalhado para exibição do perfil de um usuário.
+ * Mostra:
+ * - Foto de perfil (ou inicial do nome).
+ * - Nome completo, Apelido, E-mail e Bio.
+ * - Ícones temáticos para cada campo informativo.
+ */
 export const UserInfoModal: React.FC<UserInfoModalProps> = ({ visible, onClose, user }) => {
     return (
         <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
             <View style={styles.overlay}>
                 <View style={styles.modalContainer}>
+                    {/* Botão Fechar em X */}
                     <TouchableOpacity style={styles.closeButton} onPress={onClose}>
                         <Ionicons name="close" size={28} color={COLORS.text} />
                     </TouchableOpacity>
 
+                    {/* Área da Foto/Avatar */}
                     <View style={styles.avatarContainer}>
                         {user.photoUrl ? (
                             <Image source={{ uri: user.photoUrl }} style={styles.avatar} />
@@ -31,6 +47,7 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ visible, onClose, 
                         )}
                     </View>
 
+                    {/* Lista de Informações em Rows */}
                     <View style={styles.infoContainer}>
                         {user.nickname && (
                             <View style={styles.infoRow}>
@@ -58,6 +75,7 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ visible, onClose, 
                             </View>
                         </View>
 
+                        {/* Seção de Bio (se houver) */}
                         {user.bio && (
                             <View style={styles.bioSection}>
                                 <Ionicons name="document-text" size={20} color={COLORS.primary} />

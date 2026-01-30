@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming, Easing, runOnJS, interpolate, Extrapolate, createAnimatedPropAdapter, processColor } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring, interpolate } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator, TouchableOpacity, Platform, Image, Modal, KeyboardAvoidingView, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator, TouchableOpacity, Platform, Image, Modal, KeyboardAvoidingView } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
@@ -27,15 +27,27 @@ import { Celebration, CelebrationHandle } from '../components/Celebration';
 type AddItemsScreenRouteProp = RouteProp<RootStackParamList, 'AddItems'>;
 type AddItemsScreenNavProp = StackNavigationProp<RootStackParamList, 'AddItems'>;
 
+/**
+ * @component AddItemsScreen
+ * Tela principal de edição da despesa.
+ * Responsável por:
+ * - Listar e adicionar itens à despesa.
+ * - Visualizar cálculos proporcionais.
+ * - Gerenciar status da despesa e receptor.
+ * - Finalizar a despesa.
+ */
 export const AddItemsScreen = () => {
     const route = useRoute<AddItemsScreenRouteProp>();
     const navigation = useNavigation<AddItemsScreenNavProp>();
     const insets = useSafeAreaInsets();
     const { expenseId } = route.params;
 
+    // Estados de Dados
     const [expense, setExpense] = useState<Expense | null>(null);
     const [users, setUsers] = useState<User[]>([]);
     const [calculations, setCalculations] = useState<ProportionalCalculation[]>([]);
+
+    // Estados de UI e Modais
     const [loading, setLoading] = useState(true);
     const [finalizing, setFinalizing] = useState(false);
     const [isStatusModalVisible, setIsStatusModalVisible] = useState(false);
@@ -43,33 +55,35 @@ export const AddItemsScreen = () => {
     const [isPaidConfirmVisible, setIsPaidConfirmVisible] = useState(false);
     const [pendingStatus, setPendingStatus] = useState<ExpenseStatus | null>(null);
     const [showInvoiceModal, setShowInvoiceModal] = useState(false);
-
-    // Receiver & Settings
     const [showSettingsModal, setShowSettingsModal] = useState(false);
     const [tempReceiver, setTempReceiver] = useState<User | undefined>(undefined);
 
     const [toast, setToast] = useState({ visible: false, message: '', type: 'info' as 'success' | 'error' | 'info' });
     const celebrationRef = useRef<CelebrationHandle>(null);
     const [showCelebration, setShowCelebration] = useState(false);
-    const summaryProgress = useSharedValue(1); // 1 = fully open, 0 = fully closed
+
+    // Animação do Resumo (Acordeão)
+    const summaryProgress = useSharedValue(1); // 1 = aberto, 0 = fechado
     const [isSummaryCollapsed, setIsSummaryCollapsed] = useState(false);
 
+    /**
+     * Alterna a visibilidade do resumo financeiro com animação tipo mola.
+     */
     const toggleSummary = () => {
         const nextState = !isSummaryCollapsed;
         setIsSummaryCollapsed(nextState);
 
-        // Slingshot physics
         summaryProgress.value = withSpring(nextState ? 0 : 1, {
             damping: 10,
             stiffness: 100,
             mass: 0.5,
-            overshootClamping: false // Allows the "boing"
+            overshootClamping: false
         });
     };
 
     const summaryContentStyle = useAnimatedStyle(() => {
         return {
-            maxHeight: interpolate(summaryProgress.value, [0, 1], [0, 500]), // Approximate max height
+            maxHeight: interpolate(summaryProgress.value, [0, 1], [0, 500]),
             opacity: interpolate(summaryProgress.value, [0, 0.5, 1], [0, 0, 1]),
             transform: [
                 { scaleY: summaryProgress.value },
@@ -80,11 +94,15 @@ export const AddItemsScreen = () => {
         };
     }, []);
 
+    // Instâncias de Use Cases e Repositórios
     const expenseRepo = new ExpenseRepository();
     const notifRepo = new NotificationRepository();
     const addItemUseCase = new AddItemToExpenseUseCase(expenseRepo);
     const finalizeUseCase = new FinalizeExpenseUseCase(expenseRepo, notifRepo);
 
+    /**
+     * Carrega dados da despesa e lista de usuários.
+     */
     const loadData = async () => {
         try {
             const exp = await expenseRepo.getExpense(expenseId);
@@ -95,7 +113,7 @@ export const AddItemsScreen = () => {
 
             if (exp) {
                 updateCalculations(exp);
-                // Set initial receiver
+                // Define quem recebe (Receptor ou Criador)
                 const receiverId = exp.receiverId || exp.createdBy;
                 const receiver = allUsers.find(u => u.id === receiverId);
                 setTempReceiver(receiver);
@@ -111,6 +129,9 @@ export const AddItemsScreen = () => {
         loadData();
     }, [expenseId]);
 
+    /**
+     * Recalcula os valores proporcionais localmente.
+     */
     const updateCalculations = (currentExpense: Expense) => {
         const calcs = calculateProportionalAmounts(
             currentExpense.items,
@@ -121,6 +142,10 @@ export const AddItemsScreen = () => {
         setCalculations(calcs);
     };
 
+    /**
+     * Adiciona um novo item à despesa.
+     * Atualiza o estado local de forma otimista e recalcula valores.
+     */
     const handleAddItem = async (assignedUsers: { userId: string, userName: string }[], description: string, unitPrice: number, quantity: number) => {
         if (!expense || expense.status === 'paid') return;
 
@@ -136,7 +161,7 @@ export const AddItemsScreen = () => {
 
             await addItemUseCase.execute(expense.id, newItem);
 
-            // Optimistic update
+            // Atualização Otimista
             const updatedExpense = {
                 ...expense,
                 items: [...expense.items, newItem]
@@ -148,6 +173,9 @@ export const AddItemsScreen = () => {
         }
     };
 
+    /**
+     * Inicia o fluxo de finalização da despesa.
+     */
     const handleFinalize = async () => {
         if (!expense || !expense.items || expense.items.length === 0) {
             Alert.alert('Ops!', 'Adicione pelo menos um item antes de finalizar. 🛒');
@@ -162,12 +190,14 @@ export const AddItemsScreen = () => {
             celebrationRef.current?.start();
         }, 100);
 
-        // Hide after 5 seconds
         setTimeout(() => {
             setShowCelebration(false);
         }, 5000);
     };
 
+    /**
+     * Executa a lógica de finalização (geração de cobranças).
+     */
     const executeFinalization = async () => {
         setFinalizing(true);
         try {
@@ -184,6 +214,9 @@ export const AddItemsScreen = () => {
         }
     };
 
+    /**
+     * Lida com a seleção manual de status via modal.
+     */
     const handleStatusSelect = (status: ExpenseStatus) => {
         if (status === 'paid') {
             setPendingStatus(status);
@@ -213,7 +246,9 @@ export const AddItemsScreen = () => {
         }
     };
 
-
+    /**
+     * Salva as configurações da despesa (ex: quem recebe).
+     */
     const handleSaveSettings = async () => {
         if (!expense || !tempReceiver) return;
         try {
@@ -235,12 +270,9 @@ export const AddItemsScreen = () => {
     }
 
     const isPaid = expense.status === 'paid';
-
-    // Calculate total dynamically to avoid stale state
     const itemsTotal = expense.items ? expense.items.reduce((acc, item) => acc + item.amount, 0) : 0;
     const currentTotal = itemsTotal + expense.deliveryFee + expense.serviceFee - expense.discount;
 
-    // Determine who receives
     const receiverId = expense.receiverId || expense.createdBy;
     const receiver = users.find(u => u.id === receiverId);
     const receiverName = receiver ? receiver.name : expense.createdByName;
@@ -250,7 +282,7 @@ export const AddItemsScreen = () => {
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 style={{ flex: 1 }}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0} // Adjust if needed
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
             >
                 <ScrollView contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 20, paddingTop: insets.top + 20 }]} style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
                     <View style={styles.headerRow}>
@@ -270,7 +302,7 @@ export const AddItemsScreen = () => {
                         </View>
                     </View>
 
-                    {/* Receiver Info Banner */}
+                    {/* Banner de quem recebe */}
                     <View style={styles.receiverBanner}>
                         <Ionicons name="wallet-outline" size={18} color={COLORS.primary} />
                         <Text style={styles.receiverText}>
@@ -285,6 +317,7 @@ export const AddItemsScreen = () => {
                         </View>
                     )}
 
+                    {/* Resumo da Conta (Accordion) */}
                     <View style={[styles.summaryBox, { overflow: 'hidden' }]}>
                         <TouchableOpacity
                             style={styles.summaryHeader}
@@ -331,8 +364,10 @@ export const AddItemsScreen = () => {
                         </Animated.View>
                     </View>
 
+                    {/* Input de Itens */}
                     {!isPaid && <ItemInput users={users} onAdd={handleAddItem} />}
 
+                    {/* Lista de Cálculos Proporcionais */}
                     <View style={styles.sectionHeader}>
                         <Ionicons name="people-outline" size={20} color={COLORS.text} />
                         <Text style={styles.sectionTitle}>Divisão do Valor</Text>
@@ -354,6 +389,7 @@ export const AddItemsScreen = () => {
                         ))}
                     </View>
 
+                    {/* Lista Detalhada de Itens */}
                     <View style={styles.itemsList}>
                         <View style={styles.sectionHeader}>
                             <Ionicons name="list-outline" size={20} color={COLORS.text} />
@@ -378,6 +414,7 @@ export const AddItemsScreen = () => {
                         })}
                     </View>
 
+                    {/* Botões de Ação */}
                     {!isPaid && (
                         <View style={styles.buttonRow}>
                             <ScaleButton
@@ -425,7 +462,7 @@ export const AddItemsScreen = () => {
                 </ScrollView >
             </KeyboardAvoidingView>
 
-            {/* Modal for Settings (Receiver) */}
+            {/* Modal de Configurações (Quem recebe) */}
             <Modal visible={showSettingsModal} transparent animationType="slide">
                 <View style={styles.modalOverlay}>
                     <View style={styles.settingsModalContent}>
@@ -454,6 +491,7 @@ export const AddItemsScreen = () => {
                 </View>
             </Modal>
 
+            {/* Modais de Confirmação */}
             <CustomConfirmModal
                 visible={isConfirmModalVisible}
                 title="Finalizar Despesa"
@@ -559,9 +597,8 @@ const styles = StyleSheet.create({
     summaryHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between', // Changed to expand
+        justifyContent: 'space-between',
         marginBottom: 16,
-        // gap: 8, // handled by inner view
     },
     summaryTitle: {
         fontSize: 14,
@@ -611,7 +648,6 @@ const styles = StyleSheet.create({
         marginBottom: 12,
     },
     sectionTitle: { color: COLORS.text, fontSize: 18, fontWeight: '800' },
-
     calculationsList: { gap: 10 },
     calcRow: {
         flexDirection: 'row',
@@ -639,7 +675,6 @@ const styles = StyleSheet.create({
     userName: { color: COLORS.text, fontWeight: '700', fontSize: 16 },
     userDetail: { color: COLORS.textSecondary, fontSize: 13, marginTop: 2 },
     amount: { color: COLORS.primary, fontWeight: '800', fontSize: 18 },
-
     itemsList: { marginTop: 12 },
     itemRow: {
         flexDirection: 'row',
@@ -656,7 +691,6 @@ const styles = StyleSheet.create({
     itemDesc: { color: COLORS.text, fontWeight: '600', fontSize: 15 },
     itemUser: { color: COLORS.textSecondary, fontSize: 12, marginTop: 2 },
     itemAmount: { color: COLORS.text, fontWeight: '700', fontSize: 15 },
-
     buttonRow: {
         flexDirection: 'row',
         gap: 12,
@@ -680,7 +714,6 @@ const styles = StyleSheet.create({
     },
     buttonText: { fontWeight: 'bold', fontSize: 18, color: '#FFF' },
     saveButtonText: { color: COLORS.primary },
-
     paidHeader: {
         flexDirection: 'row',
         alignItems: 'center',

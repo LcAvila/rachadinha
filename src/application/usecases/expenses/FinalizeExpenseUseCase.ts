@@ -4,12 +4,28 @@ import { calculateProportionalAmounts } from '../../utils/CalculateProportionalA
 import { PendingPayment } from '../../../domain/entities/PendingPayment';
 import { formatCurrency } from '../../../core/utils/formatCurrency';
 
+/**
+ * @class FinalizeExpenseUseCase
+ * Caso de uso para finalizar uma despesa.
+ * Realiza o cálculo de divisão, gera pagamentos pendentes e notifica os usuários envolvidos.
+ */
 export class FinalizeExpenseUseCase {
+    /**
+     * Construtor do FinalizeExpenseUseCase.
+     * @param expenseRepository Repositório de despesas.
+     * @param notificationRepository Repositório de notificações.
+     */
     constructor(
         private expenseRepository: IExpenseRepository,
         private notificationRepository: INotificationRepository
     ) { }
 
+    /**
+     * Executa a finalização da despesa.
+     * @param expenseId ID da despesa a ser finalizada.
+     * @returns Uma promessa vazia.
+     * @throws Error se a despesa não for encontrada ou já estiver paga.
+     */
     async execute(expenseId: string): Promise<void> {
         const expense = await this.expenseRepository.getExpense(expenseId);
         if (!expense) throw new Error('Despesa não encontrada');
@@ -21,6 +37,7 @@ export class FinalizeExpenseUseCase {
         }
 
         // 1. Calcular Rateio
+        // Utiliza a função utilitária para dividir valores proporcionais
         const calculations = calculateProportionalAmounts(
             expense.items,
             expense.deliveryFee,
@@ -38,6 +55,7 @@ export class FinalizeExpenseUseCase {
             // Pular o criador da despesa (assumindo que ele pagou e vai receber)
             if (calc.userId === expense.createdBy) continue;
 
+            // Cria o objeto de pagamento pendente
             const payment: Omit<PendingPayment, 'id'> = {
                 expenseId: expense.id,
                 expenseTitle: expense.title,
@@ -50,6 +68,7 @@ export class FinalizeExpenseUseCase {
                 createdAt: new Date(),
             };
 
+            // Persiste o pagamento pendente
             await this.expenseRepository.createPendingPayment(payment);
 
             // Preparar notificação
@@ -61,7 +80,7 @@ export class FinalizeExpenseUseCase {
                 title: 'Nova Despesa Finalizada',
                 message: `${expense.createdByName} incluiu você na despesa "${expense.title}". Valor: ${formatCurrency(calc.finalAmount)}.`,
                 read: false,
-                type: 'expense_invite', // or 'payment_request'
+                type: 'expense_invite', // ou 'payment_request'
                 createdAt: new Date(),
                 data: { expenseId: expense.id }
             });

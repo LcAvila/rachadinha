@@ -27,23 +27,38 @@ import { AnimatedButton } from '../components/AnimatedButton';
 
 type LoginScreenProp = StackNavigationProp<RootStackParamList, 'Login'>;
 
+/**
+ * @component LoginScreen
+ * Tela unificada de Autenticação (Login e Cadastro).
+ * Permite que o usuário entre na aplicação ou crie uma nova conta.
+ */
 export const LoginScreen = () => {
     const navigation = useNavigation<LoginScreenProp>();
     const insets = useSafeAreaInsets();
-    const [isLogin, setIsLogin] = useState(true);
+
+    // Estados do formulário
+    const [isLogin, setIsLogin] = useState(true); // Toggle entre Login e Cadastro
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [name, setName] = useState('');
     const [username, setUsername] = useState('');
+
+    // Estados de UI
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [toast, setToast] = useState({ visible: false, message: '', type: 'info' as 'success' | 'error' | 'info' });
 
+    // Instância das dependências (Repositories e UseCases)
     const authRepo = new AuthRepository();
     const loginUseCase = new LoginUseCase(authRepo);
     const registerUseCase = new RegisterUseCase(authRepo);
 
+    /**
+     * Lida com a submissão do formulário (Login ou Cadastro).
+     * Realiza validações básicas e chama os casos de uso apropriados.
+     */
     const handleAuth = async () => {
+        // Validação de campos obrigatórios
         if (!email || !password) {
             setToast({ visible: true, message: 'Preencha todos os campos 🧐', type: 'error' });
             return;
@@ -56,14 +71,18 @@ export const LoginScreen = () => {
         setLoading(true);
         try {
             if (isLogin) {
+                // Fluxo de Login
                 await loginUseCase.execute(email, password);
                 setToast({ visible: true, message: 'Login realizado com sucesso! 🎉', type: 'success' });
             } else {
+                // Fluxo de Cadastro
                 await registerUseCase.execute(email, password, name, username);
                 setToast({ visible: true, message: 'Sua conta foi criada com sucesso! 🎉', type: 'success' });
             }
         } catch (error: any) {
-            console.error('Auth error:', error);
+            console.error('Erro de autenticação:', error);
+
+            // Tratamento de erros comuns do Firebase Auth
             let message = 'Algo deu errado. Tente novamente.';
             if (error.code === 'auth/invalid-email') message = 'O e-mail digitado não é válido. 📧';
             if (error.code === 'auth/user-not-found') message = 'Usuário não encontrado. Crie uma conta! 👤';
@@ -83,8 +102,8 @@ export const LoginScreen = () => {
         >
             <ScrollView contentContainerStyle={{ flexGrow: 1, paddingTop: insets.top, paddingBottom: insets.bottom }} showsVerticalScrollIndicator={false}>
                 <View style={styles.content}>
+                    {/* Animação de entrada do Logo */}
                     <Animated.View entering={FadeInUp.delay(200).duration(800)} style={styles.header}>
-                        {/* Logo Image */}
                         <View style={styles.logoContainer}>
                             <Image
                                 source={require('../../../assets/logo.png')}
@@ -92,13 +111,11 @@ export const LoginScreen = () => {
                                 resizeMode="contain"
                             />
                         </View>
-
-
-
-
                     </Animated.View>
 
+                    {/* Animação de entrada do Formulário */}
                     <Animated.View entering={FadeInUp.delay(400).duration(800)} style={styles.formContainer}>
+                        {/* Campos específicos de cadastro */}
                         {!isLogin && (
                             <View style={styles.inputContainer}>
                                 <TextInput
@@ -150,6 +167,7 @@ export const LoginScreen = () => {
                             </TouchableOpacity>
                         </View>
 
+                        {/* Botão Principal com Animação de Loading */}
                         <AnimatedButton
                             variant="primary"
                             title={isLogin ? 'Entrar' : 'Cadastrar'}
@@ -158,6 +176,7 @@ export const LoginScreen = () => {
                             disabled={loading}
                         />
 
+                        {/* Botão para alternar entre login e cadastro */}
                         <TouchableOpacity onPress={() => setIsLogin(!isLogin)} style={styles.footerButton}>
                             <Text style={styles.footerText}>
                                 {isLogin ? 'Criar conta' : 'Já possui conta? Entrar'}
@@ -165,7 +184,7 @@ export const LoginScreen = () => {
                         </TouchableOpacity>
                     </Animated.View>
 
-                    {/* Social Placeholder */}
+                    {/* Placeholder para Login Social (Futuro) */}
                     <View style={styles.socialContainer}>
                         <Ionicons name="logo-google" size={24} color="#9CA3AF" style={styles.socialIcon} />
                         <Ionicons name="logo-facebook" size={24} color="#9CA3AF" style={styles.socialIcon} />
@@ -173,6 +192,7 @@ export const LoginScreen = () => {
                     </View>
                 </View>
             </ScrollView>
+
             <Toast
                 visible={toast.visible}
                 message={toast.message}
@@ -186,7 +206,7 @@ export const LoginScreen = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: COLORS.background, // Light/White background
+        backgroundColor: COLORS.background, // Fundo claro/branco
     },
     content: {
         flex: 1,
@@ -219,14 +239,14 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 32,
         fontWeight: 'bold',
-        color: COLORS.accent, // Gold color
+        color: COLORS.accent, // Dourado
         marginBottom: 30,
-        fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif', // Trying to match serif font
+        fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
     },
     welcomeText: {
         fontSize: 24,
         fontWeight: 'bold',
-        color: COLORS.primary, // Teal color
+        color: COLORS.primary, // Teal
     },
     formContainer: {
         width: '100%',

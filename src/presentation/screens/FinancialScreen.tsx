@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, StatusBar, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,18 +13,28 @@ import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 
+/**
+ * @component FinancialScreen
+ * Tela de relatórios financeiros detalhados.
+ * Exibe o total gasto, gráficos de evolução, ranking de gastos e interações com outros usuários.
+ * Permite filtrar por Semana, Mês ou Ano.
+ */
 export const FinancialScreen = () => {
-
+    // Estados
     const [period, setPeriod] = useState<Period>('week');
     const [loading, setLoading] = useState(true);
-    const [stats, setStats] = useState<any>(null); // Use proper type
+    const [stats, setStats] = useState<any>(null);
     const [isFilterVisible, setIsFilterVisible] = useState(false);
     const insets = useSafeAreaInsets();
 
+    // Dependências
     const expenseRepo = new ExpenseRepository();
     const authRepo = new AuthRepository();
     const statsUseCase = new GetFinancialStatsUseCase(expenseRepo);
 
+    /**
+     * Carrega as estatísticas financeiras com base no período selecionado.
+     */
     const loadStats = useCallback(async () => {
         try {
             setLoading(true);
@@ -60,7 +69,7 @@ export const FinancialScreen = () => {
         <View style={styles.container}>
             <StatusBar backgroundColor={COLORS.background} barStyle="dark-content" />
 
-            {/* Header with Discreet Filter */}
+            {/* Cabeçalho com Filtro Discreto */}
             <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
                 <Text style={styles.screenTitle}>Relatório</Text>
 
@@ -95,6 +104,7 @@ export const FinancialScreen = () => {
             >
                 {stats && (
                     <>
+                        {/* Cartão de Visão Geral */}
                         <Animated.View entering={FadeInDown.delay(100).springify()}>
                             <LinearGradient
                                 colors={[COLORS.primary, '#4F46E5']}
@@ -118,6 +128,7 @@ export const FinancialScreen = () => {
                             </LinearGradient>
                         </Animated.View>
 
+                        {/* Gráfico de Evolução */}
                         <Animated.View entering={FadeInDown.delay(200).springify()} style={styles.chartContainer}>
                             <View style={styles.sectionHeader}>
                                 <Text style={styles.sectionTitle}>Evolução</Text>
@@ -126,6 +137,7 @@ export const FinancialScreen = () => {
                             <SpendingChart data={stats.chartData} />
                         </Animated.View>
 
+                        {/* Ranking de Maiores Gastos */}
                         <Animated.View entering={FadeInDown.delay(300).springify()}>
                             <View style={styles.sectionHeader}>
                                 <Text style={styles.sectionTitle}>Maiores Gastos</Text>
@@ -153,16 +165,12 @@ export const FinancialScreen = () => {
                             </View>
                         </Animated.View>
 
+                        {/* Ranking de Interações */}
                         <Animated.View entering={FadeInDown.delay(400).springify()}>
                             <Text style={styles.sectionTitle}>Interações Principais</Text>
 
                             <View style={styles.balanceRow}>
-                                {/* Payers (People I OWE / Paid me) - Using toPayByPerson logic from UseCase but labeled as "Credores" */}
-                                {/* Wait, logic check: 
-                                    toPayByPerson = People I owe. Meaning they Paid FOR me. "Quem mais pagou pra mim"
-                                    toReceiveByPerson = People who owe me. Meaning I Paid FOR them. "Quem eu mais paguei" 
-                                */}
-
+                                {/* Coluna: Quem mais me pagou (quem me deveu) */}
                                 <View style={styles.balanceColumn}>
                                     <Text style={styles.subSectionTitle}>Quem realizou mais pagamentos para mim</Text>
                                     {stats.toPayByPerson.slice(0, 3).map((person: any, index: number) => (
@@ -179,7 +187,7 @@ export const FinancialScreen = () => {
                                     {stats.toPayByPerson.length === 0 && <Text style={styles.emptyMiniText}>Ninguém.</Text>}
                                 </View>
 
-                                {/* Receivers (People I PAID for / Owe me) */}
+                                {/* Coluna: Para quem mais paguei (quem paguei por eles) */}
                                 <View style={styles.balanceColumn}>
                                     <Text style={styles.subSectionTitle}>Quem recebeu mais pagamentos de mim</Text>
                                     {stats.toReceiveByPerson.slice(0, 3).map((person: any, index: number) => (

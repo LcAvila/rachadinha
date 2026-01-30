@@ -1,14 +1,26 @@
 import { IExpenseRepository } from '../../../domain/repositories/IExpenseRepository';
 import { Expense } from '../../../domain/entities/Expense';
 
+/**
+ * @type Period
+ * Define o período de tempo para filtro das estatísticas.
+ */
 export type Period = 'week' | 'month' | 'year';
 
+/**
+ * @interface PersonBalance
+ * Estrutura auxiliar para exibir o balanço por pessoa.
+ */
 export interface PersonBalance {
     userId: string;
     userName: string;
     amount: number;
 }
 
+/**
+ * @interface FinancialStats
+ * Agrupamento de todas as estatísticas financeiras retornadas para o usuário.
+ */
 export interface FinancialStats {
     totalSpent: number;
     rachadinhaTotal: number;
@@ -20,14 +32,30 @@ export interface FinancialStats {
     toPayByPerson: PersonBalance[];
 }
 
+/**
+ * @class GetFinancialStatsUseCase
+ * Caso de uso responsável por calcular e agregar as estatísticas financeiras do usuário.
+ */
 export class GetFinancialStatsUseCase {
+    /**
+     * Construtor do GetFinancialStatsUseCase.
+     * @param expenseRepo Repositório de despesas.
+     */
     constructor(private expenseRepo: IExpenseRepository) { }
 
+    /**
+     * Executa o cálculo das estatísticas.
+     * @param userId ID do usuário.
+     * @param period Período a ser considerado (semana, mês, ano).
+     * @returns Uma promessa que resolve com o objeto FinancialStats.
+     */
     async execute(userId: string, period: Period): Promise<FinancialStats> {
         const expenses = await this.expenseRepo.getUserExpenses(userId);
         const { toReceive, toPay } = await this.expenseRepo.getPendingPaymentsForUser(userId);
 
         const now = new Date();
+
+        // Filtra as despesas baseadas no período selecionado
         const filteredExpenses = expenses.filter((expense: Expense) => {
             const date = expense.createdAt;
             if (period === 'week') {
@@ -41,13 +69,14 @@ export class GetFinancialStatsUseCase {
             }
         });
 
+        // Calcula o total gasto no período
         const totalSpent = filteredExpenses.reduce((acc: number, curr: Expense) => {
             return acc + (curr.totalAmount || 0);
         }, 0);
 
         const rachadinhaTotal = filteredExpenses.length;
 
-        // Group items for "Maiores Gastos"
+        // Agrupar itens para "Maiores Gastos"
         const itemMap = new Map<string, { amount: number; count: number }>();
         filteredExpenses.forEach((expense: Expense) => {
             if (expense.items) {
@@ -66,63 +95,24 @@ export class GetFinancialStatsUseCase {
             .sort((a, b) => b.amount - a.amount)
             .slice(0, 5);
 
-        // Aggregate "Who I paid the most" (A Pagar -> Paid) 
-        // Logic: Check Expenses I created where others paid me OR Expenses others created where I paid them? 
-        // User Request: "pessoas que eu mais paguei" (Who I paid most) & "pessoa que mais pagou pra mim" (Who paid me most)
-        // Simplified: Use toPay/toReceive but filter by PAID status to show history, 
-        // BUT current getPendingPaymentsForUser might only return pending. 
-        // Assuming we want HISTORICAL data from expenses.
+        // -- Abaixo seguimos com a lógica de pagamentos pendentes/ativos --
+        // Utiliza toReceive e toPay para verificar quem deve ou tem a receber
 
-        // For now, let's use the 'toReceive' and 'toPay' arrays which seem to hold current balances.
-        // If we want historical TOP lists, we need to iterate all expenses.
-        // Let's stick to the current "Pending/Active" balances for consistency with the screen, 
-        // OR iterate expenses to find who is the "Best Payer" historically.
-        // Given "Relatório" context, historical seems better but 'toPay/toReceive' is what is readily available in repo.
-        // Let's USE what we have in 'filteredExpenses' to check participants.
-
-        // Actually, let's use the Balance maps we already create below, but sort them.
-
-        // Aggregate receivables by person (Who owes me / Paid me)
-        const receiveMap = new Map<string, { name: string; amount: number; count: number }>();
-        toReceive.forEach(p => {
-            // For a "Report", we usually want what happened in the period.
-            // If toReceive contains ALL history, good. If only pending, it's just a snapshot.
-            // Let's assume it's a snapshot of current debt for now as per 'GetPendingExpensesUseCase'.
-            // UseCase says 'getPendingPaymentsForUser'. 
-
-            // Changing approach: Top Payers/Receivers usually implies "Who did I share most expenses with".
-            // Let's calculate based on the 'filteredExpenses' involved users.
-        });
-
-        // REVERTING TO SIMPLE SNAPSHOT due to lack of full transaction history in this specific UseCase.
-        // We will sort the existing toReceiveByPerson/toPayByPerson for the UI.
-
-        // ... Wait, user wants "Pessoas que eu mais paguei" -> implies Completed Payments.
-        // Current repo implementation of getPendingPayments might strictly be PENDING.
-        // I will implement a basic "Top Interact" based on filteredExpenses for now.
-
-        // Let's just create the maps for internal use.
-        const interactMap = new Map<string, { name: string; amount: number; count: number, type: 'paid' | 'received' }>();
-
-        // Refinding the aggregations below.
-
-        const topReceivers: { name: string; amount: number; count: number }[] = [];
-        const topPayers: { name: string; amount: number; count: number }[] = [];
-
-        // Aggregate receivables by person
+        // Agregar "A Receber" por pessoa
         const receiveMapIter = new Map<string, { name: string; amount: number }>();
         toReceive.filter(p => !p.paid).forEach(p => {
             const current = receiveMapIter.get(p.fromUserId) || { name: p.fromUserName, amount: 0 };
             receiveMapIter.set(p.fromUserId, { ...current, amount: current.amount + p.amount });
         });
 
-        // Aggregate payables by person
+        // Agregar "A Pagar" por pessoa
         const payMapIter = new Map<string, { name: string; amount: number }>();
         toPay.filter(p => !p.paid).forEach(p => {
             const current = payMapIter.get(p.toUserId) || { name: p.toUserName, amount: 0 };
             payMapIter.set(p.toUserId, { ...current, amount: current.amount + p.amount });
         });
 
+        // Transforma maps em arrays ordenados
         const toReceiveByPerson = Array.from(receiveMapIter.entries()).map(([id, val]) => ({
             userId: id,
             userName: val.name,
@@ -135,7 +125,7 @@ export class GetFinancialStatsUseCase {
             amount: val.amount
         })).sort((a, b) => b.amount - a.amount);
 
-        // Chart Data
+        // Gera dados para o gráfico de evolução
         const chartData = this.generateChartData(filteredExpenses, period);
 
         return {
@@ -145,11 +135,17 @@ export class GetFinancialStatsUseCase {
             chartData,
             toReceiveByPerson,
             toPayByPerson,
-            topReceivers: [], // Placeholder if we don't have historical data
+            topReceivers: [], // Placeholder se não tiver dados históricos
             topPayers: [] // Placeholder
         };
     }
 
+    /**
+     * Gera os dados formatados para o gráfico de linha.
+     * @param expenses Lista de despesas filtradas.
+     * @param period Período selecionado.
+     * @returns Array de objetos com label e value.
+     */
     private generateChartData(expenses: Expense[], period: Period): { label: string; value: number }[] {
         const map = new Map<string, number>();
 
@@ -170,4 +166,3 @@ export class GetFinancialStatsUseCase {
         return Array.from(map.entries()).map(([label, value]) => ({ label, value }));
     }
 }
-

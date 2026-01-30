@@ -22,27 +22,44 @@ import { PendingPayment } from '../../domain/entities/PendingPayment';
 import { User } from '../../domain/entities/User';
 import { FIREBASE_COLLECTIONS } from '../../core/constants/constants';
 
+/**
+ * @class ExpenseRepository
+ * Repositório para gerenciar despesas, itens e pagamentos no Firestore.
+ */
 export class ExpenseRepository implements IExpenseRepository {
+
+    /**
+     * Cria uma nova despesa.
+     * @param expense Dados da despesa.
+     * @returns Despesa criada com ID.
+     */
     async createExpense(expense: Omit<Expense, 'id'>): Promise<Expense> {
         const expenseToSave = {
             ...expense,
+            // Preenche involvedUserIds com os criadores e envolvidos, removendo duplicatas
             involvedUserIds: expense.involvedUserIds.length > 0
                 ? Array.from(new Set([...expense.involvedUserIds, expense.createdBy]))
                 : [expense.createdBy]
         };
-        // Filter out undefined values as Firestore doesn't support them
+
+        // Remove valores undefined para evitar erros no Firestore
         const cleanExpense = JSON.parse(JSON.stringify(expenseToSave));
+
+        // Adiciona ao Firestore
         const docRef = await addDoc(collection(db, FIREBASE_COLLECTIONS.EXPENSES), cleanExpense);
         return { ...expenseToSave, id: docRef.id };
     }
 
+    /**
+     * Busca uma despesa pelo ID.
+     */
     async getExpense(id: string): Promise<Expense | null> {
         const docRef = doc(db, FIREBASE_COLLECTIONS.EXPENSES, id);
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
             const data = docSnap.data();
-            // Convert Firestore Timestamps to Dates if necessary
+            // Converte timestamps
             return {
                 id: docSnap.id,
                 ...data,
@@ -55,29 +72,41 @@ export class ExpenseRepository implements IExpenseRepository {
         return null;
     }
 
+    /**
+     * Atualiza dados de uma despesa.
+     */
     async updateExpense(id: string, expense: Partial<Expense>): Promise<void> {
         const docRef = doc(db, FIREBASE_COLLECTIONS.EXPENSES, id);
         await updateDoc(docRef, expense);
     }
 
+    /**
+     * Adiciona um item unitário à despesa e atualiza totais.
+     * @param expenseId ID da despesa.
+     * @param item Item a adicionar.
+     */
     async addItemToExpense(expenseId: string, item: ExpenseItem): Promise<void> {
         const docRef = doc(db, FIREBASE_COLLECTIONS.EXPENSES, expenseId);
 
-        // Extract all involved User IDs from the assignedTo array
-        // Fallback to item.userId for backward compatibility if assignedTo is missing
+        // Extrai todos os IDs de usuários envolvidos no item
+        // Fallback para item.userId para compatibilidade retroativa
         const newInvolvedIds = item.assignedTo
             ? item.assignedTo.map(u => u.userId)
             : (item.userId ? [item.userId] : []);
 
         if (newInvolvedIds.length > 0) {
+            // Atualiza atomicamente arrays e incrementa o total
             await updateDoc(docRef, {
-                items: arrayUnion(item),
-                involvedUserIds: arrayUnion(...newInvolvedIds),
-                totalAmount: increment(item.amount)
+                items: arrayUnion(item), // Adiciona item ao array
+                involvedUserIds: arrayUnion(...newInvolvedIds), // Adiciona novos IDs aos envolvidos (sem duplicar)
+                totalAmount: increment(item.amount) // Incrementa o valor total no servidor
             });
         }
     }
 
+    /**
+     * Marca a despesa como finalizada e define a data de finalização.
+     */
     async finalizeExpense(expenseId: string): Promise<void> {
         const docRef = doc(db, FIREBASE_COLLECTIONS.EXPENSES, expenseId);
         await updateDoc(docRef, {
@@ -86,11 +115,11 @@ export class ExpenseRepository implements IExpenseRepository {
         });
     }
 
+    /**
+     * Busca despesas relacionadas a um usuário (criadas por ele ou onde ele está envolvido).
+     */
     async getUserExpenses(userId: string): Promise<Expense[]> {
-        // Queries logic depends on requirements. Here fetching created by user or involved.
-        // For MVP, lets simplistic approach: Expenses created by user.
-        // Ideally we would query expenses where items array contains user, but Firestore complex query.
-        // Let's implement fetching expenses created by the user for now.
+        // Query simples: involvedUserIds contém o usuário
         const q = query(
             collection(db, FIREBASE_COLLECTIONS.EXPENSES),
             where('involvedUserIds', 'array-contains', userId)
@@ -108,33 +137,45 @@ export class ExpenseRepository implements IExpenseRepository {
             } as Expense;
         });
 
-        // Client-side sorting to bypass index requirement
+        // Ordenação no cliente para evitar necessidade de índices compostos complexos no Firestore por enquanto
         return expenses.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     }
 
+    /**
+     * Deleta uma despesa.
+     */
     async deleteExpense(expenseId: string): Promise<void> {
         const docRef = doc(db, FIREBASE_COLLECTIONS.EXPENSES, expenseId);
         await deleteDoc(docRef);
     }
 
+    /**
+     * Cria registro de pagamento pendente.
+     */
     async createPendingPayment(payment: Omit<PendingPayment, 'id'>): Promise<PendingPayment> {
         const docRef = await addDoc(collection(db, FIREBASE_COLLECTIONS.PENDING_PAYMENTS), payment);
         return { ...payment, id: docRef.id };
     }
 
+    /**
+     * Busca pagamentos pendentes divididos em "A Receber" e "A Pagar".
+     */
     async getPendingPaymentsForUser(userId: string): Promise<{ toReceive: PendingPayment[]; toPay: PendingPayment[] }> {
+        // Busca o que o usuário tem a receber
         const toReceiveQuery = query(
             collection(db, FIREBASE_COLLECTIONS.PENDING_PAYMENTS),
             where('toUserId', '==', userId),
             where('paid', '==', false)
         );
 
+        // Busca o que o usuário tem a pagar
         const toPayQuery = query(
             collection(db, FIREBASE_COLLECTIONS.PENDING_PAYMENTS),
             where('fromUserId', '==', userId),
             where('paid', '==', false)
         );
 
+        // Executa em paralelo
         const [toReceiveSnap, toPaySnap] = await Promise.all([
             getDocs(toReceiveQuery),
             getDocs(toPayQuery)
@@ -146,6 +187,9 @@ export class ExpenseRepository implements IExpenseRepository {
         return { toReceive, toPay };
     }
 
+    /**
+     * Marca um pagamento como realizado.
+     */
     async markPaymentAsPaid(paymentId: string): Promise<void> {
         const docRef = doc(db, FIREBASE_COLLECTIONS.PENDING_PAYMENTS, paymentId);
         await updateDoc(docRef, {
@@ -154,17 +198,29 @@ export class ExpenseRepository implements IExpenseRepository {
         });
     }
 
+    /**
+     * Exclui todos os pagamentos pendentes de uma despesa (ex: ao reabrir a despesa).
+     * Usa Batch para deleção em lote.
+     */
     async deletePendingPaymentsByExpenseId(expenseId: string): Promise<void> {
         const q = query(
             collection(db, FIREBASE_COLLECTIONS.PENDING_PAYMENTS),
             where('expenseId', '==', expenseId)
         );
         const snapshot = await getDocs(q);
+
+        // Inicia batch de escrita
         const batch = writeBatch(db);
-        snapshot.docs.forEach(doc => batch.delete(doc.ref));
+        snapshot.docs.forEach(doc => batch.delete(doc.ref)); // Agenda deleções
+
+        // Comita as alterações
         await batch.commit();
     }
 
+    /**
+     * Busca todos os usuários do sistema.
+     * Método auxiliar.
+     */
     async getAllUsers(): Promise<User[]> {
         const querySnapshot = await getDocs(collection(db, FIREBASE_COLLECTIONS.USERS));
         return querySnapshot.docs.map(doc => {

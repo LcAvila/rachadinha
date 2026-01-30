@@ -3,21 +3,42 @@ import { Modal, View, Text, TouchableOpacity, StyleSheet, Platform } from 'react
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../core/constants/constants';
 
+/**
+ * Definição de uma opção de status dentro do modal.
+ */
 type StatusOption = {
+    /** Texto amigável exibido ao usuário */
     label: string;
+    /** Valor técnico do status no domínio */
     value: 'draft' | 'waiting_payment' | 'paid';
+    /** Nome do ícone Ionicons correspondente */
     icon: string;
+    /** Cor característica do status */
     color: string;
 };
 
+/**
+ * Interface para as propriedades do StatusModal.
+ */
 interface StatusModalProps {
+    /** Controla se o modal está vísivel */
     visible: boolean;
+    /** O status selecionado atualmente na despesa */
     currentStatus: 'draft' | 'waiting_payment' | 'paid';
+    /** Callback disparado ao selecionar uma nova opção */
     onSelect: (status: 'draft' | 'waiting_payment' | 'paid') => void;
+    /** Callback disparado ao cancelar a operação */
     onCancel: () => void;
 }
 
+/**
+ * @component StatusModal
+ * Modal de seleção para alteração do status de uma despesa.
+ * Exibe uma lista de opções clicáveis (Rascunho, Aguardando Pagamento, Pago)
+ * com destaques visuais para a opção selecionada no momento.
+ */
 export const StatusModal: React.FC<StatusModalProps> = ({ visible, currentStatus, onSelect, onCancel }) => {
+    // Configurações das opções de status
     const options: StatusOption[] = [
         { label: 'Rascunho', value: 'draft', icon: 'create-outline', color: COLORS.textSecondary },
         { label: 'Aguardando Pagamento', value: 'waiting_payment', icon: 'time-outline', color: COLORS.warning },
@@ -29,16 +50,23 @@ export const StatusModal: React.FC<StatusModalProps> = ({ visible, currentStatus
             <View style={styles.overlay}>
                 <View style={styles.modalContainer}>
                     <Text style={styles.title}>Alterar Status</Text>
+
+                    {/* Lista de Opções */}
                     {options.map(opt => (
                         <TouchableOpacity
                             key={opt.value}
-                            style={[styles.option, opt.value === currentStatus && { backgroundColor: opt.color + '20' }]}
+                            style={[
+                                styles.option,
+                                opt.value === currentStatus && { backgroundColor: opt.color + '20' } // Destaque suave se for o atual
+                            ]}
                             onPress={() => onSelect(opt.value)}
                         >
                             <Ionicons name={opt.icon as any} size={20} color={opt.color} />
                             <Text style={styles.optionText}>{opt.label}</Text>
                         </TouchableOpacity>
                     ))}
+
+                    {/* Botão Cancelar */}
                     <TouchableOpacity style={styles.cancelButton} onPress={onCancel}>
                         <Text style={styles.cancelText}>Cancelar</Text>
                     </TouchableOpacity>

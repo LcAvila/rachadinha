@@ -13,16 +13,27 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 type GroupsScreenProp = StackNavigationProp<RootStackParamList, 'Groups'>;
 
+/**
+ * @component GroupsScreen
+ * Tela que lista os grupos do usuário.
+ * Permite visualizar grupos existentes e navegar para criar um novo.
+ */
 export const GroupsScreen = () => {
     const navigation = useNavigation<GroupsScreenProp>();
+
+    // Estados de dados e UI
     const [groups, setGroups] = useState<Group[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
+    // Dependências
     const groupRepo = new GroupRepository();
     const authRepo = new AuthRepository();
     const getUserGroupsUseCase = new GetUserGroupsUseCase(groupRepo);
 
+    /**
+     * Carrega a lista de grupos do usuário autenticado.
+     */
     const loadGroups = async () => {
         const user = await authRepo.getCurrentUser();
         if (user) {
@@ -33,6 +44,7 @@ export const GroupsScreen = () => {
         setRefreshing(false);
     };
 
+    // UseFocusEffect garante que a lista seja recarregada ao voltar para esta tela (ex: após criar um grupo)
     useFocusEffect(
         useCallback(() => {
             loadGroups();
@@ -44,11 +56,15 @@ export const GroupsScreen = () => {
         loadGroups();
     };
 
+    /**
+     * Renderiza o card de um grupo individual na lista.
+     * @param item O grupo a ser renderizado.
+     */
     const renderGroupItem = ({ item }: { item: Group }) => (
         <TouchableOpacity
             style={styles.card}
             activeOpacity={0.7}
-            // Navigate to group details/expenses later
+            // Navega para a Home (por enquanto). Futuramente pode levar a detalhes do grupo.
             onPress={() => navigation.navigate('Home')}
         >
             <View style={styles.cardIcon}>

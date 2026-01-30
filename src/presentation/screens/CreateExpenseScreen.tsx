@@ -17,18 +17,31 @@ import { Toast } from '../components/Toast';
 
 type CreateExpenseScreenProp = StackNavigationProp<RootStackParamList, 'CreateExpense'>;
 
+/**
+ * @component CreateExpenseScreen
+ * Tela inicial de criação de uma despesa.
+ * Define o título, taxas, descontos e imagem da NF.
+ * Próximo passo: AddItemsScreen.
+ */
 export const CreateExpenseScreen = () => {
     const navigation = useNavigation<CreateExpenseScreenProp>();
     const insets = useSafeAreaInsets();
+
+    // Estados do formulário
     const [title, setTitle] = useState('');
     const [deliveryFee, setDeliveryFee] = useState('');
     const [serviceFee, setServiceFee] = useState('');
     const [discount, setDiscount] = useState('');
     const [image, setImage] = useState<string | null>(null);
+
+    // Estados de UI/Processamento
     const [uploading, setUploading] = useState(false);
     const [loading, setLoading] = useState(false);
     const [toast, setToast] = useState({ visible: false, message: '', type: 'info' as 'success' | 'error' | 'info' });
 
+    /**
+     * Abre a galeria para selecionar uma imagem (Nota Fiscal).
+     */
     const pickImage = async () => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
@@ -38,8 +51,8 @@ export const CreateExpenseScreen = () => {
 
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
-            quality: 0.7,
+            allowsEditing: true, // Permite crop
+            quality: 0.7, // Reduz tamanho
         });
 
         if (!result.canceled) {
@@ -47,6 +60,11 @@ export const CreateExpenseScreen = () => {
         }
     };
 
+    /**
+     * Faz upload da imagem selecionada para o Firebase Storage.
+     * @param uri URI local da imagem.
+     * @returns URL pública da imagem.
+     */
     const uploadImage = async (uri: string): Promise<string | undefined> => {
         return new Promise((resolve, reject) => {
             setUploading(true);
@@ -68,7 +86,7 @@ export const CreateExpenseScreen = () => {
                 console.error('XHR Error:', e);
                 reject(new TypeError('Network request failed'));
             };
-            xhr.responseType = 'blob';
+            xhr.responseType = 'blob'; // Importante para upload de arquivos
             xhr.open('GET', uri, true);
             xhr.send(null);
         }).finally(() => {
@@ -76,6 +94,9 @@ export const CreateExpenseScreen = () => {
         }) as Promise<string | undefined>;
     };
 
+    /**
+     * Cria a despesa inicial e navega para adicionar itens.
+     */
     const handleCreate = async () => {
         if (!title) {
             setToast({ visible: true, message: 'O título é obrigatório', type: 'error' });
@@ -106,14 +127,14 @@ export const CreateExpenseScreen = () => {
                 deliveryFee: parseCurrencyInput(deliveryFee),
                 serviceFee: parseCurrencyInput(serviceFee),
                 discount: parseCurrencyInput(discount),
-                totalAmount: 0,
+                totalAmount: 0, // Será calculado com os itens
                 invoiceUrl: invoiceUrl || null,
-                involvedUserIds: [] // Initially just the creator? Or empty? Assuming empty.
+                involvedUserIds: [] // Inicialmente vazio
             });
 
             setToast({ visible: true, message: 'Despesa criada com sucesso! 🎉', type: 'success' });
 
-            // Navigate to Add Items after showing toast
+            // Navega para a tela de adicionar itens
             setTimeout(() => {
                 navigation.replace('AddItems', { expenseId: expense.id });
             }, 1000);
@@ -131,7 +152,6 @@ export const CreateExpenseScreen = () => {
             style={{ flex: 1 }}
         >
             <ScrollView contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 20 }]} style={{ backgroundColor: '#F8FAFC' }}>
-                {/* Back Button */}
                 <TouchableOpacity
                     style={[styles.backButton, { top: insets.top + 10 }]}
                     onPress={() => navigation.goBack()}
@@ -148,6 +168,7 @@ export const CreateExpenseScreen = () => {
                 </View>
 
                 <View style={styles.form}>
+                    {/* Título */}
                     <View style={styles.inputGroup}>
                         <Text style={styles.label}>Título da Despesa</Text>
                         <View style={styles.inputWrapper}>
@@ -162,6 +183,7 @@ export const CreateExpenseScreen = () => {
                         </View>
                     </View>
 
+                    {/* Taxas */}
                     <View style={styles.row}>
                         <View style={[styles.inputGroup, { flex: 1 }]}>
                             <Text style={styles.label}>Taxa/Entrega</Text>
@@ -193,6 +215,7 @@ export const CreateExpenseScreen = () => {
                         </View>
                     </View>
 
+                    {/* Desconto */}
                     <View style={styles.inputGroup}>
                         <Text style={styles.label}>Desconto ou Cupom</Text>
                         <View style={styles.inputWrapper}>
@@ -208,6 +231,7 @@ export const CreateExpenseScreen = () => {
                         </View>
                     </View>
 
+                    {/* Upload de Nota Fiscal */}
                     <View style={styles.inputGroup}>
                         <Text style={styles.label}>Nota Fiscal (Upload)</Text>
                         <TouchableOpacity style={styles.uploadButton} onPress={pickImage}>
@@ -224,6 +248,7 @@ export const CreateExpenseScreen = () => {
                         )}
                     </View>
 
+                    {/* Botão de Continuar */}
                     <TouchableOpacity
                         style={[styles.button, (loading || uploading) && { opacity: 0.7 }]}
                         onPress={handleCreate}
@@ -275,7 +300,6 @@ const styles = StyleSheet.create({
     },
     header: {
         alignItems: 'center',
-        // marginTop: dynamic
         marginBottom: 32,
     },
     iconCircle: {

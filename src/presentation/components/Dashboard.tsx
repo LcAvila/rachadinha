@@ -1,36 +1,53 @@
-
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
 import { COLORS } from '../../core/constants/constants';
 import { formatCurrency } from '../../core/utils/formatCurrency';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { Expense } from '../../domain/entities/Expense'; // Adjusted path
+import { Expense } from '../../domain/entities/Expense';
 
+/**
+ * Interface para as propriedades do componente Dashboard.
+ */
 interface DashboardProps {
+    /** Valor total que o usuário tem a receber */
     toReceive: number;
+    /** Valor total que o usuário tem a pagar */
     toPay: number;
+    /** Lista de todas as despesas para cálculo de estatísticas de status */
     expenses: Expense[];
+    /** Função chamada ao clicar no título ou ícone do dashboard para navegar aos detalhes */
     onPress?: () => void;
 }
 
 const { width } = Dimensions.get('window');
 
+/**
+ * @component Dashboard
+ * Exibe um resumo financeiro e estatístico para o usuário na tela inicial.
+ * Inclui:
+ * - Balanço de valores a pagar e a receber.
+ * - Gráfico de barras proporcional comparando débitos e créditos.
+ * - Grid de estatísticas rápidas por status da despesa (Rascunhos, Pendentes, Pagos).
+ * - Funcionalidade de recolher (collapse) para economizar espaço.
+ */
 export const Dashboard: React.FC<DashboardProps> = ({ toReceive, toPay, expenses, onPress }) => {
+    // Estado para controlar se o dashboard está expandido ou recolhido
     const [collapsed, setCollapsed] = useState(false);
 
-    // Simple calculations for stats
+    // Cálculos simples para contagem de status
     const totalDraft = expenses.filter(e => e.status === 'draft').length;
     const totalWaiting = expenses.filter(e => e.status === 'waiting_payment').length;
     const totalPaid = expenses.filter(e => e.status === 'paid').length;
 
-    // Bar chart percentages
+    // Cálculo das porcentagens para a barra gráfica
     const totalFlow = toReceive + toPay;
     const receivePct = totalFlow > 0 ? (toReceive / totalFlow) * 100 : 0;
     const payPct = totalFlow > 0 ? (toPay / totalFlow) * 100 : 0;
 
     return (
         <Animated.View entering={FadeInDown.duration(600).springify()} style={styles.container}>
+            {/* Cabeçalho do Dashboard */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={styles.headerTitleContainer}>
                     <Ionicons name="pie-chart" size={20} color={COLORS.primary} />
@@ -42,10 +59,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ toReceive, toPay, expenses
                 </TouchableOpacity>
             </View>
 
+            {/* Conteúdo exibido apenas se não estiver recolhido */}
             {!collapsed && (
                 <>
-
-                    {/* Main Balance Row */}
+                    {/* Linha de Balanço Principal */}
                     <View style={styles.balanceRow}>
                         <View style={styles.balanceItem}>
                             <Text style={styles.label}>A Pagar</Text>
@@ -62,13 +79,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ toReceive, toPay, expenses
                         </View>
                     </View>
 
-                    {/* Graphic Bar */}
+                    {/* Barra Gráfica Proporcional */}
                     <View style={styles.chartContainer}>
                         <View style={[styles.barSegment, { flex: payPct || 1, backgroundColor: COLORS.warning + '80', borderTopLeftRadius: 8, borderBottomLeftRadius: 8 }]} />
                         <View style={[styles.barSegment, { flex: receivePct || 1, backgroundColor: COLORS.success + '80', borderTopRightRadius: 8, borderBottomRightRadius: 8 }]} />
                     </View>
 
-                    {/* Stats Grid */}
+                    {/* Grid de Estatísticas Rápidas */}
                     <View style={styles.statsGrid}>
                         <View style={styles.statBox}>
                             <Text style={styles.statCount}>{totalDraft}</Text>
@@ -85,7 +102,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ toReceive, toPay, expenses
                     </View>
                 </>
             )}
-
         </Animated.View>
     );
 };

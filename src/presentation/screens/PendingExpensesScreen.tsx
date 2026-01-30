@@ -17,33 +17,50 @@ import { Celebration, CelebrationHandle } from '../components/Celebration';
 
 type PendingExpensesNavProp = StackNavigationProp<RootStackParamList, 'PendingExpenses'>;
 
+/**
+ * @component PendingExpensesScreen
+ * Tela dedicada ao gerenciamento de pendências financeiras.
+ * Possui 3 abas:
+ * - A Receber: O que outros devem ao usuário.
+ * - A Pagar: O que o usuário deve a outros.
+ * - Finalizado: Histórico de despesas pagas.
+ */
 export const PendingExpensesScreen = () => {
     const navigation = useNavigation<PendingExpensesNavProp>();
     const insets = useSafeAreaInsets();
+
+    // Estados de Controle
     const [activeTab, setActiveTab] = useState<'toReceive' | 'toPay' | 'finished'>('toReceive');
     const [toReceive, setToReceive] = useState<PendingPayment[]>([]);
     const [toPay, setToPay] = useState<PendingPayment[]>([]);
     const [finished, setFinished] = useState<Expense[]>([]);
     const [loading, setLoading] = useState(true);
+
+    // Estados de Ação
     const [isConfirmVisible, setIsConfirmVisible] = useState(false);
     const [selectedPayment, setSelectedPayment] = useState<string | null>(null);
     const celebrationRef = useRef<CelebrationHandle>(null);
 
+    // Dependências
     const expenseRepo = new ExpenseRepository();
     const authRepo = new AuthRepository();
     const getPendingUseCase = new GetPendingExpensesUseCase(expenseRepo);
 
+    /**
+     * Carrega os dados de pendências e histórico.
+     */
     const loadData = async () => {
         setLoading(true);
         try {
             const user = await authRepo.getCurrentUser();
             if (!user) return;
 
+            // Busca pagamentos pendentes
             const result = await getPendingUseCase.execute(user.id);
             setToReceive(result.toReceive);
             setToPay(result.toPay);
 
-            // Fetch finished expenses
+            // Busca histórico de despesas finalizadas
             const allExpenses = await expenseRepo.getUserExpenses(user.id);
             setFinished(allExpenses.filter(e => e.status === 'paid'));
         } catch (e) {
@@ -57,24 +74,33 @@ export const PendingExpensesScreen = () => {
         loadData();
     }, []);
 
+    /**
+     * Abre modal de confirmação para marcar um recebimento como pago.
+     */
     const handleConfirmPayment = (paymentId: string) => {
         setSelectedPayment(paymentId);
         setIsConfirmVisible(true);
     };
 
+    /**
+     * Efetiva a baixa no pagamento (confirmação de recebimento).
+     */
     const handleMarkAsPaid = async () => {
         if (!selectedPayment) return;
         try {
             await expenseRepo.markPaymentAsPaid(selectedPayment);
             setIsConfirmVisible(false);
             setSelectedPayment(null);
-            celebrationRef.current?.start();
-            loadData(); // Reload list
+            celebrationRef.current?.start(); // Inicia animação de confetes
+            loadData(); // Recarrega a lista
         } catch (e) {
             console.error(e);
         }
     };
 
+    /**
+     * Renderiza um item de pendência (A pagar ou A receber).
+     */
     const renderItem = ({ item }: { item: PendingPayment }) => (
         <View style={styles.card}>
             <View style={styles.cardLeft}>
@@ -94,6 +120,7 @@ export const PendingExpensesScreen = () => {
             </View>
             <View style={styles.cardRight}>
                 <Text style={styles.cardAmount}>{formatCurrency(item.amount)}</Text>
+                {/* Botão de confirmar recebimento (apenas na aba A Receber) */}
                 {activeTab === 'toReceive' && (
                     <TouchableOpacity
                         style={styles.payButton}
@@ -106,6 +133,9 @@ export const PendingExpensesScreen = () => {
         </View>
     );
 
+    /**
+     * Renderiza um item do histórico (Despesa Finalizada).
+     */
     const renderFinishedItem = ({ item }: { item: Expense }) => (
         <TouchableOpacity
             style={styles.card}
@@ -126,6 +156,9 @@ export const PendingExpensesScreen = () => {
         </TouchableOpacity>
     );
 
+    /**
+     * Retorna os dados corretos com base na aba ativa.
+     */
     const getData = () => {
         if (activeTab === 'toReceive') return toReceive;
         if (activeTab === 'toPay') return toPay;
@@ -141,6 +174,7 @@ export const PendingExpensesScreen = () => {
                 </TouchableOpacity>
             </View>
 
+            {/* Abas de Navegação */}
             <View style={styles.tabs}>
                 <TouchableOpacity
                     style={[styles.tab, activeTab === 'toReceive' && styles.activeTab]}
@@ -199,7 +233,6 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 20,
-        // paddingTop: 40, dynamic
         paddingBottom: 20,
     },
     title: { fontSize: 28, fontWeight: '900', color: COLORS.text },

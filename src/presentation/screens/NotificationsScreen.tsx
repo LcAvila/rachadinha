@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,13 +11,21 @@ import { COLORS } from '../../core/constants/constants';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
+/**
+ * @component NotificationsScreen
+ * Tela de notificações do usuário.
+ * Exibe lista de notificações, permite atualizar (pull-to-refresh) e marcar como lida ao clicar.
+ */
 export const NotificationsScreen = () => {
     const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
     const insets = useSafeAreaInsets();
+
+    // Estados
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
+    // Dependências
     const notificationRepo = new NotificationRepository();
     const authRepo = new AuthRepository();
 
@@ -46,15 +53,18 @@ export const NotificationsScreen = () => {
         fetchNotifications();
     };
 
+    /**
+     * Marca a notificação como lida e (opcionalmente) navega para o detalhe.
+     */
     const handlePress = async (notification: Notification) => {
         if (!notification.read) {
-            // Update local state first for immediate feedback
+            // Atualização otimista
             setNotifications(prev => prev.map(n => n.id === notification.id ? { ...n, read: true } : n));
-            // Update backend
+            // Atualização no backend
             await notificationRepo.markAsRead(notification.id);
         }
 
-        // Handle deep linking or actions (optional, can be expanded)
+        // Exemplo de deep link (se houver dados extras)
         if (notification.data?.expenseId) {
             // navigation.navigate('ExpenseDetails', { id: notification.data.expenseId });
         }
@@ -137,7 +147,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 20,
-        // paddingTop: 60, dynamic
         paddingBottom: 20,
         backgroundColor: '#FFF',
         borderBottomWidth: 1,

@@ -3,17 +3,33 @@ import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, ViewStyle, TextS
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { COLORS } from '../../core/constants/constants';
 
+/**
+ * Interface para as propriedades do componente AnimatedButton.
+ */
 interface AnimatedButtonProps {
+    /** Função chamada ao pressionar o botão */
     onPress: () => void;
+    /** Texto exibido no botão */
     title?: string;
+    /** Estado de carregamento; se verdadeiro, exibe um ActivityIndicator */
     loading?: boolean;
+    /** Se verdadeiro, desabilita interações com o botão */
     disabled?: boolean;
+    /** Variante visual do botão (primário, secundário, sucesso ou outline) */
     variant?: 'primary' | 'secondary' | 'success' | 'outline';
+    /** Elementos filhos para customização interna (opcional) */
     children?: React.ReactNode;
+    /** Estilo customizado para o container do botão */
     style?: ViewStyle;
+    /** Estilo customizado para o texto do botão */
     textStyle?: TextStyle;
 }
 
+/**
+ * @component AnimatedButton
+ * Um componente de botão personalizado que inclui animações de escala ao ser pressionado
+ * e suporte integrado para estados de carregamento (loading).
+ */
 export const AnimatedButton: React.FC<AnimatedButtonProps> = ({
     onPress,
     title,
@@ -24,20 +40,33 @@ export const AnimatedButton: React.FC<AnimatedButtonProps> = ({
     style,
     textStyle
 }) => {
+    // Valor compartilhado para a animação de escala
     const scale = useSharedValue(1);
 
+    // Estilo animado que aplica a escala no container
     const animatedStyle = useAnimatedStyle(() => ({
         transform: [{ scale: scale.value }]
     }));
 
+    /**
+     * Acionado quando o usuário inicia o toque.
+     * Encolhe o botão levemente.
+     */
     const handlePressIn = () => {
         scale.value = withSpring(0.95, { damping: 10, stiffness: 400 });
     };
 
+    /**
+     * Acionado quando o usuário encerra o toque.
+     * Retorna o botão ao tamanho original.
+     */
     const handlePressOut = () => {
         scale.value = withSpring(1, { damping: 10, stiffness: 400 });
     };
 
+    /**
+     * Retorna o estilo de fundo com base na variante selecionada.
+     */
     const getButtonStyle = () => {
         switch (variant) {
             case 'primary':
@@ -51,6 +80,9 @@ export const AnimatedButton: React.FC<AnimatedButtonProps> = ({
         }
     };
 
+    /**
+     * Retorna o estilo do texto com base na variante selecionada.
+     */
     const getTextStyle = () => {
         switch (variant) {
             case 'outline':

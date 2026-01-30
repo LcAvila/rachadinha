@@ -12,22 +12,35 @@ import { EmojiPickerModal } from '../components/EmojiPickerModal';
 import { Toast } from '../components/Toast';
 import { FlatList } from 'react-native-gesture-handler';
 
+/**
+ * @component CreateGroupScreen
+ * Tela para criação de novos grupos.
+ * Permite definir nome, descrição, ícone e (simular) convite de membros.
+ */
 export const CreateGroupScreen = () => {
     const navigation = useNavigation();
     const insets = useSafeAreaInsets();
+
+    // Estados do formulário
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [emoji, setEmoji] = useState('🏠');
-    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [emoji, setEmoji] = useState('🏠'); // Ícone padrão
     const [emailInput, setEmailInput] = useState('');
     const [invitedEmails, setInvitedEmails] = useState<string[]>([]);
+
+    // Estados de UI
+    const [loading, setLoading] = useState(false);
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [toast, setToast] = useState({ visible: false, message: '', type: 'info' as 'success' | 'error' | 'info' });
 
     const groupRepo = new GroupRepository();
     const authRepo = new AuthRepository();
     const createGroupUseCase = new CreateGroupUseCase(groupRepo);
 
+    /**
+     * Adiciona um email à lista de convidados.
+     * Valida formato e duplicidade.
+     */
     const handleAddEmail = () => {
         if (!emailInput || !emailInput.includes('@')) {
             setToast({ visible: true, message: 'Digite um e-mail válido 📧', type: 'error' });
@@ -45,6 +58,9 @@ export const CreateGroupScreen = () => {
         setInvitedEmails(invitedEmails.filter(e => e !== email));
     };
 
+    /**
+     * Cria o grupo no backend.
+     */
     const handleCreate = async () => {
         if (!name.trim()) {
             Alert.alert('Ops', 'Dê um nome para o seu grupo!');
@@ -55,8 +71,8 @@ export const CreateGroupScreen = () => {
         try {
             const user = await authRepo.getCurrentUser();
             if (user) {
-                // In a real app, we would send invites to 'invitedEmails' here
-                await createGroupUseCase.execute(name, user.id, description); // Todo: Pass emoji
+                // Em um app real, enviaríamos convites para 'invitedEmails' aqui
+                await createGroupUseCase.execute(name, user.id, description); // Todo: Passar emoji para o UC
                 setToast({ visible: true, message: 'Grupo criado com sucesso! 🎉', type: 'success' });
                 setTimeout(() => {
                     navigation.goBack();
@@ -84,6 +100,7 @@ export const CreateGroupScreen = () => {
                 </View>
 
                 <View style={styles.content}>
+                    {/* Seção de Seleção de Ícone */}
                     <View style={styles.iconSection}>
                         <TouchableOpacity style={styles.iconCircle} onPress={() => setShowEmojiPicker(true)}>
                             <Text style={{ fontSize: 40 }}>{emoji}</Text>
@@ -92,6 +109,7 @@ export const CreateGroupScreen = () => {
                     </View>
 
                     <View style={styles.form}>
+                        {/* Nome do Grupo */}
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Nome do Grupo</Text>
                             <View style={styles.inputWrapper}>
@@ -106,6 +124,7 @@ export const CreateGroupScreen = () => {
                             </View>
                         </View>
 
+                        {/* Descrição */}
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Descrição (Opcional)</Text>
                             <View style={[styles.inputWrapper, styles.textAreaWrapper]}>
@@ -122,6 +141,7 @@ export const CreateGroupScreen = () => {
                             </View>
                         </View>
 
+                        {/* Convite de Membros */}
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Convidar Membros</Text>
                             <View style={styles.inputWrapper}>
@@ -140,7 +160,7 @@ export const CreateGroupScreen = () => {
                                 </TouchableOpacity>
                             </View>
 
-                            {/* Invited List */}
+                            {/* Lista de Convidados (Chips) */}
                             {invitedEmails.length > 0 && (
                                 <View style={styles.inviteList}>
                                     {invitedEmails.map((email, index) => (
@@ -199,7 +219,6 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 20,
-        // paddingTop: dynamic
         paddingBottom: 20,
     },
     backButton: {

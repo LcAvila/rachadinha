@@ -2,16 +2,31 @@ import React from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet, Platform, Dimensions } from 'react-native';
 import { COLORS } from '../../core/constants/constants';
 
+/**
+ * Interface para as propriedades do CustomConfirmModal.
+ */
 interface CustomConfirmModalProps {
+    /** Controla a visibilidade do modal */
     visible: boolean;
+    /** Título exibido no topo do modal */
     title: string;
+    /** Mensagem descritiva ou pergunta de confirmação */
     message: string;
+    /** Função executada ao clicar no botão de confirmação */
     onConfirm: () => void;
+    /** Função executada ao clicar no botão de cancelamento */
     onCancel: () => void;
+    /** Texto personalizado para o botão de confirmação (padrão: "Confirmar") */
     confirmText?: string;
+    /** Texto personalizado para o botão de cancelamento (padrão: "Cancelar") */
     cancelText?: string;
 }
 
+/**
+ * @component CustomConfirmModal
+ * Um modal genérico de confirmação com design limpo e centralizado.
+ * Ideal para ações críticas que exigem verificação do usuário antes de prosseguir.
+ */
 export const CustomConfirmModal: React.FC<CustomConfirmModalProps> = ({
     visible,
     title,
@@ -34,10 +49,12 @@ export const CustomConfirmModal: React.FC<CustomConfirmModalProps> = ({
                     <Text style={styles.message}>{message}</Text>
 
                     <View style={styles.buttonContainer}>
+                        {/* Botão de Cancelar */}
                         <TouchableOpacity style={[styles.button, styles.cancelButton]} onPress={onCancel}>
                             <Text style={styles.cancelButtonText}>{cancelText}</Text>
                         </TouchableOpacity>
 
+                        {/* Botão de Confirmar */}
                         <TouchableOpacity style={[styles.button, styles.confirmButton]} onPress={onConfirm}>
                             <Text style={styles.confirmButtonText}>{confirmText}</Text>
                         </TouchableOpacity>

@@ -4,26 +4,44 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../core/constants/constants';
 import { AnimatedButton } from './AnimatedButton';
 
+/**
+ * Interface para as propriedades do ChangePasswordModal.
+ */
 interface ChangePasswordModalProps {
+    /** Controla a visibilidade do modal */
     visible: boolean;
+    /** Função chamada para fechar o modal */
     onClose: () => void;
+    /** Caso de uso para alteração de senha, recebendo a senha atual e a nova */
     onChangePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
+/**
+ * @component ChangePasswordModal
+ * Modal dedicado à alteração de senha do usuário.
+ * Realiza validações básicas de preenchimento, comprimento mínimo e confirmação de senha.
+ * Gerencia visibilidade das senhas (ver/ocultar).
+ */
 export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
     visible,
     onClose,
     onChangePassword
 }) => {
+    // Estados dos campos
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+
+    // Estados de controle de UI
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [showCurrent, setShowCurrent] = useState(false);
     const [showNew, setShowNew] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
 
+    /**
+     * Valida os campos e chama a função de alteração de senha.
+     */
     const handleSubmit = async () => {
         setError('');
 
@@ -45,6 +63,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
         setLoading(true);
         try {
             await onChangePassword(currentPassword, newPassword);
+            // Limpa os campos após o sucesso
             setCurrentPassword('');
             setNewPassword('');
             setConfirmPassword('');
@@ -67,6 +86,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
                         </TouchableOpacity>
                     </View>
 
+                    {/* Senha Atual */}
                     <View style={styles.inputGroup}>
                         <Text style={styles.label}>Senha Atual</Text>
                         <View style={styles.inputWrapper}>
@@ -84,6 +104,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
                         </View>
                     </View>
 
+                    {/* Nova Senha */}
                     <View style={styles.inputGroup}>
                         <Text style={styles.label}>Nova Senha</Text>
                         <View style={styles.inputWrapper}>
@@ -101,6 +122,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
                         </View>
                     </View>
 
+                    {/* Confirmar Nova Senha */}
                     <View style={styles.inputGroup}>
                         <Text style={styles.label}>Confirmar Nova Senha</Text>
                         <View style={styles.inputWrapper}>
@@ -118,6 +140,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
                         </View>
                     </View>
 
+                    {/* Mensagem de Erro */}
                     {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
                     <View style={styles.buttons}>

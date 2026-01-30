@@ -20,26 +20,42 @@ import { NotificationRepository } from '../../infrastructure/firebase/Notificati
 
 type HomeScreenProp = StackNavigationProp<RootStackParamList, 'Home'>;
 
+/**
+ * @component HomeScreen
+ * Tela principal do aplicativo.
+ * Exibe o dashboard financeiro simplificado, lista de despesas e acesso rápido a ações.
+ * Suporta filtragem por status (Rascunho, Aguardando, Pago) via parâmetros de rota (Tab Navigator).
+ */
 export const HomeScreen = () => {
     const navigation = useNavigation<HomeScreenProp>();
     const route = useRoute();
     const insets = useSafeAreaInsets();
-    // @ts-ignore - route params might be undefined if accessed directly, but TabNavigator sets them.
+
+    // Obtém o filtro de status da navegação (padrão: 'draft')
+    // @ts-ignore - Parâmetros injetados pelo TabNavigator
     const filterStatus: ExpenseStatus = route.params?.filterStatus || 'draft';
 
+    // Estados de dados
     const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
     const [filteredExpenses, setFilteredExpenses] = useState<Expense[]>([]);
     const [loading, setLoading] = useState(true);
     const [pendingStats, setPendingStats] = useState({ toReceive: 0, toPay: 0 });
-    const [menuOpen, setMenuOpen] = useState(false);
     const [userName, setUserName] = useState('');
     const [unreadCount, setUnreadCount] = useState(0);
 
+    // Estados de UI
+    const [menuOpen, setMenuOpen] = useState(false);
+
+    // Dependências
     const expenseRepo = new ExpenseRepository();
     const authRepo = new AuthRepository();
     const notifRepo = new NotificationRepository();
     const pendingUseCase = new GetPendingExpensesUseCase(expenseRepo);
 
+    /**
+     * Busca dados iniciais: Usuário, Despesas, Estatísticas e Notificações.
+     * Realiza limpeza automática de rascunhos antigos (>24h).
+     */
     const fetchData = useCallback(async () => {
         try {
             setLoading(true);
@@ -47,28 +63,27 @@ export const HomeScreen = () => {
             if (!user) return;
             setUserName(user.nickname || user.name.split(' ')[0]);
 
-            // Fetch expenses and filter
-            // Fetch expenses and filter
+            // Busca e filtra despesas
             const fetchedExpenses = await expenseRepo.getUserExpenses(user.id);
             setAllExpenses(fetchedExpenses);
 
             const filtered = fetchedExpenses.filter(e => e.status === filterStatus);
             setFilteredExpenses(filtered);
 
-            // Fetch stats
+            // Busca estatísticas financeiras (A receber / A pagar)
             const { toReceive, toPay } = await pendingUseCase.execute(user.id);
             const totalReceive = toReceive.reduce((acc, p) => acc + p.amount, 0);
             const totalPay = toPay.reduce((acc, p) => acc + p.amount, 0);
             setPendingStats({ toReceive: totalReceive, toPay: totalPay });
 
-            // Cleanup old drafts
+            // Limpeza de Rascunhos Expirados (> 24 horas)
             const oneDayAgo = new Date();
             oneDayAgo.setDate(oneDayAgo.getDate() - 1);
 
             const expiredDrafts = fetchedExpenses.filter(e => e.status === 'draft' && e.createdAt < oneDayAgo);
             for (const draft of expiredDrafts) {
                 await expenseRepo.deleteExpense(draft.id);
-                // Notify user
+                // Notifica o usuário sobre a exclusão
                 await notifRepo.createNotification({
                     userId: user.id,
                     title: 'Rascunho Excluído 🗑️',
@@ -79,14 +94,14 @@ export const HomeScreen = () => {
                 });
             }
 
+            // Atualiza lista se houver exclusões
             if (expiredDrafts.length > 0) {
-                // Refresh list if anything was deleted
                 const updatedExpenses = await expenseRepo.getUserExpenses(user.id);
                 setAllExpenses(updatedExpenses);
                 setFilteredExpenses(updatedExpenses.filter(e => e.status === filterStatus));
             }
 
-            // Fetch unread notifications count
+            // Conta notificações não lidas para o badge
             const notifications = await notifRepo.getUserNotifications(user.id);
             setUnreadCount(notifications.filter(n => !n.read).length);
 
@@ -95,8 +110,9 @@ export const HomeScreen = () => {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [filterStatus]);
 
+    // Recarrega dados ao focar na tela
     useFocusEffect(
         useCallback(() => {
             fetchData();
@@ -105,24 +121,6 @@ export const HomeScreen = () => {
 
     const toggleMenu = () => {
         setMenuOpen(!menuOpen);
-    };
-
-    const getStatusColor = (status: ExpenseStatus) => {
-        switch (status) {
-            case 'draft': return COLORS.textSecondary;
-            case 'waiting_payment': return COLORS.warning;
-            case 'paid': return COLORS.success;
-            default: return COLORS.primary;
-        }
-    };
-
-    const getStatusLabel = (status: ExpenseStatus) => {
-        switch (status) {
-            case 'draft': return 'Rascunho';
-            case 'waiting_payment': return 'Aguardando Pagamento';
-            case 'paid': return 'Pago';
-            default: return '';
-        }
     };
 
     const renderExpenseItem = ({ item, index }: { item: Expense; index: number }) => {
@@ -158,6 +156,7 @@ export const HomeScreen = () => {
             </View>
 
             <View style={styles.content}>
+                {/* Dashboard Resumido */}
                 <Dashboard
                     toPay={pendingStats.toPay}
                     toReceive={pendingStats.toReceive}
@@ -171,7 +170,6 @@ export const HomeScreen = () => {
                     data={filteredExpenses}
                     keyExtractor={item => item.id}
                     renderItem={renderExpenseItem}
-
                     contentContainerStyle={{ paddingBottom: 100 + insets.bottom }}
                     refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchData} colors={[COLORS.primary]} />}
                     ListEmptyComponent={
@@ -181,7 +179,7 @@ export const HomeScreen = () => {
                 />
             </View>
 
-            {/* Speed Dial Menu */}
+            {/* Menu Flutuante (Speed Dial) */}
             <View style={[styles.bottomBar, { bottom: 100 + insets.bottom }]}>
                 {menuOpen && (
                     <Animated.View entering={FadeInDown.springify()} style={styles.menuContainer}>
@@ -226,7 +224,6 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: COLORS.background },
     header: {
         backgroundColor: COLORS.primary,
-        // paddingTop dynamic
         paddingBottom: 24,
         paddingHorizontal: 24,
         flexDirection: 'row',
@@ -266,111 +263,11 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         paddingTop: 20,
     },
-    saldoCard: {
-        backgroundColor: '#FFF',
-        borderRadius: 16,
-        padding: 24,
-        marginBottom: 24,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 2,
-    },
-    saldoLabel: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: COLORS.text,
-        marginBottom: 8,
-    },
-    saldoSubLabel: {
-        fontSize: 14,
-        color: COLORS.textSecondary,
-        marginBottom: 4,
-    },
-    saldoHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    saldoValue: {
-        fontSize: 34,
-        fontWeight: '900',
-        color: COLORS.text,
-    },
-    saldoFooter: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: 16,
-        gap: 4,
-    },
-    saldoFooterText: {
-        fontSize: 13,
-        fontWeight: '700',
-        color: COLORS.primary,
-        textTransform: 'uppercase',
-    },
     sectionTitle: {
         fontSize: 18,
         fontWeight: 'bold',
         color: COLORS.text,
         marginBottom: 16,
-    },
-    expenseCard: {
-        backgroundColor: '#FFF',
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 12,
-        flexDirection: 'row',
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.03,
-        shadowRadius: 4,
-        elevation: 1,
-    },
-    cardIcon: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: COLORS.surfaceLight,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 16,
-    },
-    cardInfo: {
-        flex: 1,
-    },
-    cardTitle: {
-        fontSize: 17,
-        fontWeight: '700',
-        color: COLORS.text,
-        marginBottom: 6,
-    },
-    cardStatusRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    cardAmount: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: COLORS.textSecondary,
-    },
-    cardDetails: {
-        gap: 4,
-    },
-    cardItemCount: {
-        fontSize: 12,
-        color: COLORS.textSecondary,
-        fontWeight: '500',
-    },
-    cardArrow: {
-        marginLeft: 8,
-    },
-    cardValues: {
-        alignItems: 'flex-end',
     },
     emptyText: {
         textAlign: 'center',
@@ -379,7 +276,7 @@ const styles = StyleSheet.create({
     },
     bottomBar: {
         position: 'absolute',
-        bottom: (Platform.OS === 'ios' ? 110 : 90) + (Platform.OS === 'android' ? 20 : 0), // Base + safety margin
+        bottom: (Platform.OS === 'ios' ? 110 : 90) + (Platform.OS === 'android' ? 20 : 0),
         right: 24,
         alignItems: 'flex-end',
     },

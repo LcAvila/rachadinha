@@ -1,12 +1,12 @@
-// Import the functions you need from the SDKs you need
+// Importa as funções necessárias dos SDKs do Firebase
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 
-// TODO: Replace the following with your app's Firebase project configuration
-// See: https://firebase.google.com/docs/web/setup#config-object
+// Configuração do projeto Firebase
+// Contém as chaves e identificadores para conexão com o backend
 const firebaseConfig = {
     apiKey: "AIzaSyAAB53WbXXLHS1m7T365WE3hWJSwPzUM_0",
     authDomain: "rachadinha-5dbb3.firebaseapp.com",
@@ -18,9 +18,21 @@ const firebaseConfig = {
     measurementId: "G-EXZC3Z4D8W"
 };
 
-// Initialize Firebase
+// Inicializa a instância do Firebase App
 const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const storage = getStorage(app);
 
+// Exporta as instâncias dos serviços para uso em toda a aplicação
+/**
+ * Serviço de Autenticação do Firebase.
+ */
+export const auth = getAuth(app);
+
+/**
+ * Serviço de Banco de Dados Firestore.
+ */
+export const db = getFirestore(app);
+
+/**
+ * Serviço de Armazenamento (Storage) do Firebase.
+ */
+export const storage = getStorage(app);
