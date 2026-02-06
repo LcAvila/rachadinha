@@ -11,6 +11,10 @@ import * as ImagePicker from 'expo-image-picker';
 import { Toast } from '../components/Toast';
 import { ChangePasswordModal } from '../components/ChangePasswordModal';
 import { AnimatedButton } from '../components/AnimatedButton';
+import { formatPhone, formatDate, validatePixKey } from '../../core/utils/inputMasks';
+import { generatePixPayload } from '../../core/utils/pixPayload';
+import QRCode from 'react-native-qrcode-svg';
+import * as Clipboard from 'expo-clipboard';
 
 /**
  * @component ProfileScreen
@@ -35,6 +39,8 @@ export const ProfileScreen = () => {
     const [pixKey, setPixKey] = useState('');
     const [birthDate, setBirthDate] = useState('');
     const [location, setLocation] = useState('');
+    const [pixPayload, setPixPayload] = useState('');
+    const [pixType, setPixType] = useState('');
 
     // Estados de UI e Processamento
     const [loading, setLoading] = useState(false);
@@ -57,7 +63,38 @@ export const ProfileScreen = () => {
         setPhone(currentUser?.phone || '');
         setPixKey(currentUser?.pixKey || '');
         setBirthDate(currentUser?.birthDate || '');
+        setBirthDate(currentUser?.birthDate || '');
         setLocation(currentUser?.location || '');
+
+        if (currentUser?.pixKey) {
+            updatePixState(currentUser.pixKey, currentUser.name);
+        }
+    };
+
+    const updatePixState = (key: string, name: string) => {
+        const { valid, type } = validatePixKey(key);
+        setPixType(type);
+        if (valid) {
+            const payload = generatePixPayload({
+                key,
+                name: name,
+                city: 'BRASILIA', // Pode ser dinâmico se tiver cidade do user
+                transactionId: 'RACHADINHA'
+            });
+            setPixPayload(payload);
+        } else {
+            setPixPayload('');
+        }
+    };
+
+    const handleCopyPix = async () => {
+        if (pixPayload) {
+            await Clipboard.setStringAsync(pixPayload);
+            setToast({ visible: true, message: 'Código PIX copiado! 📋', type: 'success' });
+        } else if (user?.pixKey) {
+            await Clipboard.setStringAsync(user.pixKey);
+            setToast({ visible: true, message: 'Chave PIX copiada! 📋', type: 'success' });
+        }
     };
 
     /**
@@ -213,12 +250,12 @@ export const ProfileScreen = () => {
                                         <Text style={styles.infoTagText}>{user.phone}</Text>
                                     </View>
                                 )}
-                                {user.pixKey && (
+                                {user.pixKey ? (
                                     <View style={styles.infoTag}>
                                         <Ionicons name="card-outline" size={14} color={COLORS.primary} />
-                                        <Text style={styles.infoTagText}>PIX</Text>
+                                        <Text style={styles.infoTagText}>PIX: {user.pixKey}</Text>
                                     </View>
-                                )}
+                                ) : null}
                                 {user.location && (
                                     <View style={styles.infoTag}>
                                         <Ionicons name="location-outline" size={14} color={COLORS.primary} />
@@ -226,6 +263,30 @@ export const ProfileScreen = () => {
                                     </View>
                                 )}
                             </View>
+
+                            {/* Área do QRCode (Modo Visualização) */}
+                            {pixPayload ? (
+                                <View style={styles.qrCodeContainer}>
+                                    <View style={styles.qrCodeWrapper}>
+                                        <QRCode
+                                            value={pixPayload}
+                                            size={180}
+                                            color={COLORS.text}
+                                            backgroundColor="white"
+                                        />
+                                    </View>
+                                    <Text style={styles.qrCodeLabel}>Seu QR Code PIX</Text>
+                                    <TouchableOpacity style={styles.copyPixButton} onPress={handleCopyPix}>
+                                        <Ionicons name="copy-outline" size={18} color="#FFF" />
+                                        <Text style={styles.copyPixText}>Copiar Código PIX</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            ) : user.pixKey ? (
+                                <TouchableOpacity style={[styles.copyPixButton, { marginTop: 0, marginBottom: 24 }]} onPress={handleCopyPix}>
+                                    <Ionicons name="copy-outline" size={18} color="#FFF" />
+                                    <Text style={styles.copyPixText}>Copiar Chave PIX</Text>
+                                </TouchableOpacity>
+                            ) : null}
 
                             <TouchableOpacity onPress={() => setIsEditing(true)} style={styles.editButton}>
                                 <Ionicons name="pencil" size={16} color={COLORS.primary} />
@@ -271,10 +332,11 @@ export const ProfileScreen = () => {
                                 <TextInput
                                     style={styles.input}
                                     value={phone}
-                                    onChangeText={setPhone}
+                                    onChangeText={(text) => setPhone(formatPhone(text))}
                                     placeholder="(00) 00000-0000"
                                     placeholderTextColor={COLORS.textSecondary}
                                     keyboardType="phone-pad"
+                                    maxLength={15}
                                 />
                             </View>
 
@@ -283,10 +345,18 @@ export const ProfileScreen = () => {
                                 <TextInput
                                     style={styles.input}
                                     value={pixKey}
-                                    onChangeText={setPixKey}
-                                    placeholder="CPF, Email ou Celular"
+                                    onChangeText={(text) => {
+                                        setPixKey(text);
+                                        updatePixState(text, user.name);
+                                    }}
+                                    placeholder="CPF, Email, Telefone ou Aleatória"
                                     placeholderTextColor={COLORS.textSecondary}
                                 />
+                                {pixKey.length > 0 && (
+                                    <Text style={[styles.helperText, { marginTop: 4, color: pixPayload ? COLORS.success : COLORS.textSecondary }]}>
+                                        {pixPayload ? `Tipo detectado: ${pixType.toUpperCase()} ✅` : 'Chave inválida ou incompleta'}
+                                    </Text>
+                                )}
                             </View>
 
                             <View style={styles.inputGroup}>
@@ -294,10 +364,15 @@ export const ProfileScreen = () => {
                                 <TextInput
                                     style={styles.input}
                                     value={birthDate}
-                                    onChangeText={setBirthDate}
+                                    onChangeText={(text) => setBirthDate(formatDate(text))}
                                     placeholder="DD/MM/AAAA"
                                     placeholderTextColor={COLORS.textSecondary}
+                                    keyboardType="numeric"
+                                    maxLength={10}
                                 />
+                                {birthDate.length > 0 && birthDate.length < 10 && (
+                                    <Text style={styles.helperText}>Formato: DD/MM/AAAA</Text>
+                                )}
                             </View>
 
                             <View style={styles.inputGroup}>
@@ -640,5 +715,52 @@ const styles = StyleSheet.create({
         color: '#EF4444',
         fontWeight: '800',
         fontSize: 16,
+    },
+    qrCodeContainer: {
+        alignItems: 'center',
+        marginBottom: 32,
+        width: '100%',
+    },
+    qrCodeWrapper: {
+        padding: 16,
+        backgroundColor: '#FFF',
+        borderRadius: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+        elevation: 4,
+        marginBottom: 12,
+    },
+    qrCodeLabel: {
+        fontSize: 14,
+        color: COLORS.textSecondary,
+        fontWeight: '600',
+        marginBottom: 12,
+    },
+    copyPixButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: COLORS.primary,
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderRadius: 12,
+        gap: 8,
+        shadowColor: COLORS.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    copyPixText: {
+        color: '#FFF',
+        fontWeight: 'bold',
+        fontSize: 14,
+    },
+    helperText: {
+        fontSize: 12,
+        color: COLORS.textSecondary,
+        marginTop: 4,
+        fontWeight: '500',
     },
 });

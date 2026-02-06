@@ -1,4 +1,5 @@
 import { ExpenseItem } from './ExpenseItem';
+import { ExpenseParticipant } from './ExpenseParticipant';
 
 /**
  * @type ExpenseStatus
@@ -92,4 +93,10 @@ export interface Expense {
      * Lista de IDs dos usuários envolvidos na despesa.
      */
     involvedUserIds: string[];
+
+    /**
+     * Lista de participantes e seus status de aceitação.
+     * @optional
+     */
+    participants?: ExpenseParticipant[];
 }

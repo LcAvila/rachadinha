@@ -30,22 +30,33 @@ import Animated, {
     withRepeat,
     withTiming,
     Easing,
-    withDelay
+    withDelay,
+    withSpring,
+    SharedValue
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../core/constants/constants';
 import { Toast } from '../components/Toast';
 import { AnimatedButton } from '../components/AnimatedButton';
 import { LinearGradient } from 'expo-linear-gradient';
+import { DeviceMotion } from 'expo-sensors';
 
 const { width, height } = Dimensions.get('window');
 
 type LoginScreenProp = StackNavigationProp<RootStackParamList, 'Login'>;
 
 /**
- * Componente interno para as formas animadas do fundo.
+ * Componente interno para as formas animadas do fundo com parallax.
  */
-const AnimatedBlob = ({ delay, color, size, initialPos }: { delay: number, color: string, size: number, initialPos: { x: number, y: number } }) => {
+const AnimatedBlob = ({ delay, color, size, initialPos, parallaxX, parallaxY, multiplier = 1 }: {
+    delay: number,
+    color: string,
+    size: number,
+    initialPos: { x: number, y: number },
+    parallaxX: SharedValue<number>, // Changed to SharedValue
+    parallaxY: SharedValue<number>, // Changed to SharedValue
+    multiplier?: number
+}) => {
     const translateX = useSharedValue(initialPos.x);
     const translateY = useSharedValue(initialPos.y);
     const scale = useSharedValue(1);
@@ -70,8 +81,8 @@ const AnimatedBlob = ({ delay, color, size, initialPos }: { delay: number, color
 
     const animatedStyle = useAnimatedStyle(() => ({
         transform: [
-            { translateX: translateX.value },
-            { translateY: translateY.value },
+            { translateX: translateX.value + (parallaxX.value * multiplier) },
+            { translateY: translateY.value + (parallaxY.value * multiplier) },
             { scale: scale.value }
         ],
     }));
@@ -108,9 +119,52 @@ export const LoginScreen = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [toast, setToast] = useState({ visible: false, message: '', type: 'info' as 'success' | 'error' | 'info' });
 
+    // Parallax effect values
+    const parallaxX = useSharedValue(0);
+    const parallaxY = useSharedValue(0);
+
     const authRepo = new AuthRepository();
     const loginUseCase = new LoginUseCase(authRepo);
     const registerUseCase = new RegisterUseCase(authRepo);
+
+    // Setup device motion sensor for parallax
+    useEffect(() => {
+        let subscription: any;
+
+        const setupMotion = async () => {
+            try {
+                const isAvailable = await DeviceMotion.isAvailableAsync();
+                if (isAvailable) {
+                    DeviceMotion.setUpdateInterval(16); // ~60fps
+
+                    subscription = DeviceMotion.addListener((data: any) => {
+                        if (data.rotation) {
+                            // Usar rotação do dispositivo para parallax
+                            // Multiplicar por valores para amplificar o efeito
+                            parallaxX.value = withSpring(data.rotation.gamma * 20, {
+                                damping: 15,
+                                stiffness: 50
+                            });
+                            parallaxY.value = withSpring(data.rotation.beta * 20, {
+                                damping: 15,
+                                stiffness: 50
+                            });
+                        }
+                    });
+                }
+            } catch (error) {
+                console.log('DeviceMotion not available:', error);
+            }
+        };
+
+        setupMotion();
+
+        return () => {
+            if (subscription) {
+                subscription.remove();
+            }
+        };
+    }, []);
 
     const handleAuth = async () => {
         if (!email || !password) {
@@ -171,15 +225,39 @@ export const LoginScreen = () => {
 
     return (
         <View style={styles.container}>
-            {/* Background Animado */}
+            {/* Background Animado com Parallax */}
             <LinearGradient
                 colors={['#F8FAFC', '#E2E8F0', '#CBD5E1']}
                 style={StyleSheet.absoluteFill}
             />
             <View style={styles.blobsContainer}>
-                <AnimatedBlob delay={0} color={COLORS.primary + '15'} size={300} initialPos={{ x: -100, y: -50 }} />
-                <AnimatedBlob delay={1000} color={COLORS.accent + '15'} size={250} initialPos={{ x: width - 150, y: height / 3 }} />
-                <AnimatedBlob delay={2000} color={COLORS.primary + '10'} size={350} initialPos={{ x: -150, y: height - 200 }} />
+                <AnimatedBlob
+                    delay={0}
+                    color={COLORS.primary + '15'}
+                    size={300}
+                    initialPos={{ x: -100, y: -50 }}
+                    parallaxX={parallaxX}
+                    parallaxY={parallaxY}
+                    multiplier={1.5}
+                />
+                <AnimatedBlob
+                    delay={1000}
+                    color={COLORS.accent + '15'}
+                    size={250}
+                    initialPos={{ x: width - 150, y: height / 3 }}
+                    parallaxX={parallaxX}
+                    parallaxY={parallaxY}
+                    multiplier={-1.2}
+                />
+                <AnimatedBlob
+                    delay={2000}
+                    color={COLORS.primary + '10'}
+                    size={350}
+                    initialPos={{ x: -150, y: height - 200 }}
+                    parallaxX={parallaxX}
+                    parallaxY={parallaxY}
+                    multiplier={0.8}
+                />
             </View>
 
             <KeyboardAvoidingView

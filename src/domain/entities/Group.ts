@@ -40,7 +40,24 @@ export interface Group {
     /**
      * URL da foto do grupo.
      * @optional
-     * // Foto do grupo opcional
      */
     photoUrl?: string;
+
+    /**
+     * Categoria do grupo para personalização visual.
+     * @optional
+     */
+    category?: 'trip' | 'home' | 'event' | 'couple' | 'other';
+
+    /**
+     * URL ou código da imagem de capa.
+     * @optional
+     */
+    coverUrl?: string;
+
+    /**
+     * Meta financeira do grupo (Valor Alvo).
+     * @optional
+     */
+    targetAmount?: number;
 }

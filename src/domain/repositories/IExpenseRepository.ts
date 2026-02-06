@@ -1,6 +1,7 @@
 import { Expense } from '../entities/Expense';
 import { ExpenseItem } from '../entities/ExpenseItem';
-import { PendingPayment } from '../entities/PendingPayment';
+import { PendingPayment, PaymentStatus } from '../entities/PendingPayment';
+import { ParticipantStatus } from '../entities/ExpenseParticipant';
 import { User } from '../entities/User';
 
 /**
@@ -37,6 +38,23 @@ export interface IExpenseRepository {
      * @returns Uma promessa vazia.
      */
     addItemToExpense(expenseId: string, item: ExpenseItem): Promise<void>;
+
+    /**
+     * Remove um item de uma despesa existente.
+     * @param expenseId ID da despesa.
+     * @param itemIndex Índice do item a remover.
+     * @returns Uma promessa vazia.
+     */
+    deleteExpenseItem(expenseId: string, itemIndex: number): Promise<void>;
+
+    /**
+     * Atualiza o status de aceitação de um participante.
+     * @param expenseId ID da despesa.
+     * @param userId ID do usuário participante.
+     * @param status Novo status.
+     * @returns Uma promessa vazia.
+     */
+    updateExpenseParticipantStatus(expenseId: string, userId: string, status: ParticipantStatus): Promise<void>;
 
     /**
      * Finaliza uma despesa, alterando seu status e possivelmente gerando pagamentos pendentes.
@@ -82,6 +100,22 @@ export interface IExpenseRepository {
      * @returns Uma promessa vazia.
      */
     markPaymentAsPaid(paymentId: string): Promise<void>;
+
+    /**
+     * Atualiza o status de um pagamento pendente.
+     * @param paymentId ID do pagamento.
+     * @param status Novo status.
+     * @param markedBy ID do usuário que marcou.
+     * @returns Uma promessa vazia.
+     */
+    updatePendingPaymentStatus(paymentId: string, status: PaymentStatus, markedBy: string): Promise<void>;
+
+    /**
+     * Verifica se todos os pagamentos de uma despesa foram pagos.
+     * @param expenseId ID da despesa.
+     * @returns Uma promessa com true se todos foram pagos.
+     */
+    checkAllPaymentsPaid(expenseId: string): Promise<boolean>;
 
     /**
      * Exclui todos os pagamentos pendentes associados a uma despesa.

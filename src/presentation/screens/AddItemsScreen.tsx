@@ -7,8 +7,11 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { ExpenseRepository } from '../../infrastructure/firebase/ExpenseRepository';
 import { NotificationRepository } from '../../infrastructure/firebase/NotificationRepository';
+import { AuthRepository } from '../../infrastructure/firebase/AuthRepository';
 import { AddItemToExpenseUseCase } from '../../application/usecases/expenses/AddItemToExpenseUseCase';
 import { FinalizeExpenseUseCase } from '../../application/usecases/expenses/FinalizeExpenseUseCase';
+import { DeleteExpenseItemUseCase } from '../../application/usecases/expenses/DeleteExpenseItemUseCase';
+import { DeleteExpenseUseCase } from '../../application/usecases/expenses/DeleteExpenseUseCase';
 import { calculateProportionalAmounts, ProportionalCalculation } from '../../application/utils/CalculateProportionalAmounts';
 import { ItemInput } from '../components/ItemInput';
 import { UserSelector } from '../components/UserSelector';
@@ -23,6 +26,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { Ionicons } from '@expo/vector-icons';
 import { Toast } from '../components/Toast';
 import { Celebration, CelebrationHandle } from '../components/Celebration';
+import { LinearGradient } from 'expo-linear-gradient';
 
 type AddItemsScreenRouteProp = RouteProp<RootStackParamList, 'AddItems'>;
 type AddItemsScreenNavProp = StackNavigationProp<RootStackParamList, 'AddItems'>;
@@ -46,6 +50,7 @@ export const AddItemsScreen = () => {
     const [expense, setExpense] = useState<Expense | null>(null);
     const [users, setUsers] = useState<User[]>([]);
     const [calculations, setCalculations] = useState<ProportionalCalculation[]>([]);
+    const [currentUserId, setCurrentUserId] = useState<string>('');
 
     // Estados de UI e Modais
     const [loading, setLoading] = useState(true);
@@ -57,6 +62,9 @@ export const AddItemsScreen = () => {
     const [showInvoiceModal, setShowInvoiceModal] = useState(false);
     const [showSettingsModal, setShowSettingsModal] = useState(false);
     const [tempReceiver, setTempReceiver] = useState<User | undefined>(undefined);
+    const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+    const [itemToDelete, setItemToDelete] = useState<number | null>(null);
+    const [deleteExpenseConfirmVisible, setDeleteExpenseConfirmVisible] = useState(false);
 
     const [toast, setToast] = useState({ visible: false, message: '', type: 'info' as 'success' | 'error' | 'info' });
     const celebrationRef = useRef<CelebrationHandle>(null);
@@ -97,8 +105,11 @@ export const AddItemsScreen = () => {
     // Instâncias de Use Cases e Repositórios
     const expenseRepo = new ExpenseRepository();
     const notifRepo = new NotificationRepository();
+    const authRepo = new AuthRepository();
     const addItemUseCase = new AddItemToExpenseUseCase(expenseRepo);
     const finalizeUseCase = new FinalizeExpenseUseCase(expenseRepo, notifRepo);
+    const deleteItemUseCase = new DeleteExpenseItemUseCase(expenseRepo);
+    const deleteExpenseUseCase = new DeleteExpenseUseCase(expenseRepo);
 
     /**
      * Carrega dados da despesa e lista de usuários.
@@ -107,9 +118,11 @@ export const AddItemsScreen = () => {
         try {
             const exp = await expenseRepo.getExpense(expenseId);
             const allUsers = await expenseRepo.getAllUsers();
+            const currentUser = await authRepo.getCurrentUser();
 
             setExpense(exp);
             setUsers(allUsers);
+            if (currentUser) setCurrentUserId(currentUser.id);
 
             if (exp) {
                 updateCalculations(exp);
@@ -261,6 +274,38 @@ export const AddItemsScreen = () => {
         }
     };
 
+    /**
+     * Deleta um item da despesa.
+     */
+    const handleDeleteItem = async (itemIndex: number) => {
+        if (!expense || !currentUserId) return;
+
+        try {
+            await deleteItemUseCase.execute(expenseId, itemIndex, currentUserId);
+            setToast({ visible: true, message: 'Item removido! 🗑️', type: 'success' });
+            await loadData();
+        } catch (e: any) {
+            setToast({ visible: true, message: e.message || 'Erro ao deletar item', type: 'error' });
+        }
+    };
+
+    /**
+     * Deleta a despesa completa.
+     */
+    const handleDeleteExpense = async () => {
+        if (!expense || !currentUserId) return;
+
+        try {
+            await deleteExpenseUseCase.execute(expenseId, currentUserId);
+            setToast({ visible: true, message: 'Despesa excluída! 🗑️', type: 'success' });
+            setTimeout(() => {
+                navigation.navigate('Home');
+            }, 1500);
+        } catch (e: any) {
+            setToast({ visible: true, message: e.message || 'Erro ao deletar despesa', type: 'error' });
+        }
+    };
+
     if (loading || !expense) {
         return (
             <View style={[styles.container, styles.center]}>
@@ -276,6 +321,8 @@ export const AddItemsScreen = () => {
     const receiverId = expense.receiverId || expense.createdBy;
     const receiver = users.find(u => u.id === receiverId);
     const receiverName = receiver ? receiver.name : expense.createdByName;
+    const isCreator = currentUserId === expense.createdBy;
+    const canDelete = isCreator && (expense.status === 'draft' || expense.status === 'waiting_payment');
 
     return (
         <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
@@ -284,180 +331,231 @@ export const AddItemsScreen = () => {
                 style={{ flex: 1 }}
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
             >
-                <ScrollView contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 20, paddingTop: insets.top + 20 }]} style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-                    <View style={styles.headerRow}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                            <TouchableOpacity onPress={() => navigation.navigate('Home')}>
-                                <Ionicons name="arrow-back" size={24} color={COLORS.text} />
-                            </TouchableOpacity>
-                            <Text style={[styles.title, { flex: 1 }]} numberOfLines={1}>{expense.title}</Text>
+                <ScrollView contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 20 }]} style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+                    {/* Header com Gradiente */}
+                    <LinearGradient
+                        colors={[COLORS.primary, '#1a5653', '#134e4a']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={[styles.headerGradient, { paddingTop: insets.top + 12 }]}
+                    >
+                        <View style={styles.headerRow}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                                <TouchableOpacity
+                                    onPress={() => navigation.navigate('Home')}
+                                    style={styles.backButton}
+                                >
+                                    <Ionicons name="arrow-back" size={22} color="#FFF" />
+                                </TouchableOpacity>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={[styles.title, { color: '#FFF' }]} numberOfLines={1}>{expense.title}</Text>
+                                    <Text style={styles.headerSubtitle}>{expense.items?.length || 0} itens • {formatCurrency(currentTotal)}</Text>
+                                </View>
+                            </View>
+                            <View style={{ flexDirection: 'row', gap: 10 }}>
+
+                                <TouchableOpacity
+                                    onPress={() => setShowSettingsModal(true)}
+                                    style={styles.headerIconButton}
+                                >
+                                    <Ionicons name="settings-outline" size={20} color="#FFF" />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={() => !isPaid && setIsStatusModalVisible(true)}
+                                    disabled={isPaid}
+                                    style={styles.statusBadgeWrapper}
+                                >
+                                    <StatusBadge status={expense.status} />
+                                </TouchableOpacity>
+                            </View>
                         </View>
-                        <View style={{ flexDirection: 'row', gap: 12 }}>
-                            <TouchableOpacity onPress={() => setShowSettingsModal(true)}>
-                                <Ionicons name="settings-outline" size={22} color={COLORS.text} />
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => !isPaid && setIsStatusModalVisible(true)} disabled={isPaid}>
-                                <StatusBadge status={expense.status} />
-                            </TouchableOpacity>
-                        </View>
-                    </View>
+                    </LinearGradient>
 
                     {/* Banner de quem recebe */}
-                    <View style={styles.receiverBanner}>
-                        <Ionicons name="wallet-outline" size={18} color={COLORS.primary} />
-                        <Text style={styles.receiverText}>
-                            Valor a receber vai para: <Text style={{ fontWeight: 'bold' }}>{receiverName}</Text>
-                        </Text>
-                    </View>
-
-                    {isPaid && (
-                        <View style={styles.paidHeader}>
-                            <Ionicons name="checkmark-done-circle" size={24} color={COLORS.success} />
-                            <Text style={styles.paidHeaderText}>Esta despesa foi FINALIZADA</Text>
+                    <View style={styles.contentWrapper}>
+                        <View style={styles.receiverBanner}>
+                            <View style={styles.receiverIconWrapper}>
+                                <Ionicons name="wallet" size={16} color={COLORS.primary} />
+                            </View>
+                            <Text style={styles.receiverText}>
+                                Recebedor: <Text style={{ fontWeight: 'bold', color: COLORS.primary }}>{receiverName}</Text>
+                            </Text>
                         </View>
-                    )}
 
-                    {/* Resumo da Conta (Accordion) */}
-                    <View style={[styles.summaryBox, { overflow: 'hidden' }]}>
-                        <TouchableOpacity
-                            style={styles.summaryHeader}
-                            onPress={toggleSummary}
-                            activeOpacity={0.7}
-                        >
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                <Ionicons name="receipt-outline" size={20} color={COLORS.primary} />
-                                <Text style={styles.summaryTitle}>Resumo da Conta</Text>
+                        {isPaid && (
+                            <View style={styles.paidHeader}>
+                                <Ionicons name="checkmark-done-circle" size={24} color={COLORS.success} />
+                                <Text style={styles.paidHeaderText}>Esta despesa foi FINALIZADA</Text>
                             </View>
-                            <Ionicons
-                                name={isSummaryCollapsed ? "chevron-down" : "chevron-up"}
-                                size={20}
-                                color={COLORS.textSecondary}
-                            />
-                        </TouchableOpacity>
+                        )}
 
-                        <Animated.View style={summaryContentStyle}>
-                            <View style={styles.summaryContent}>
-                                <View style={styles.summaryItem}>
-                                    <Text style={styles.summaryLabel}>Itens ({expense.items ? expense.items.length : 0})</Text>
-                                    <Text style={styles.summaryValue}>{formatCurrency(expense.items ? expense.items.reduce((a, b) => a + b.amount, 0) : 0)}</Text>
-                                </View>
-                                <View style={styles.summaryItem}>
-                                    <Text style={styles.summaryLabel}>Taxas & Entrega</Text>
-                                    <Text style={styles.summaryValue}>+ {formatCurrency(expense.deliveryFee + expense.serviceFee)}</Text>
-                                </View>
-                                <View style={styles.summaryItem}>
-                                    <Text style={styles.summaryLabel}>Descontos</Text>
-                                    <Text style={[styles.summaryValue, { color: COLORS.success }]}>- {formatCurrency(expense.discount)}</Text>
-                                </View>
-                                <View style={[styles.summaryItem, styles.totalRow]}>
-                                    <Text style={styles.totalLabel}>Total Geral</Text>
-                                    <Text style={styles.totalValue}>{formatCurrency(currentTotal)}</Text>
-                                </View>
-
-                                {expense.invoiceUrl && (
-                                    <TouchableOpacity style={styles.viewInvoiceBtn} onPress={() => setShowInvoiceModal(true)}>
-                                        <Ionicons name="image-outline" size={18} color={COLORS.primary} />
-                                        <Text style={styles.viewInvoiceText}>Ver Nota Fiscal</Text>
-                                    </TouchableOpacity>
-                                )}
-                            </View>
-                        </Animated.View>
-                    </View>
-
-                    {/* Input de Itens */}
-                    {!isPaid && <ItemInput users={users} onAdd={handleAddItem} />}
-
-                    {/* Lista de Cálculos Proporcionais */}
-                    <View style={styles.sectionHeader}>
-                        <Ionicons name="people-outline" size={20} color={COLORS.text} />
-                        <Text style={styles.sectionTitle}>Divisão do Valor</Text>
-                    </View>
-                    <View style={styles.calculationsList}>
-                        {calculations.map((calc) => (
-                            <View key={calc.userId} style={styles.calcRow}>
-                                <View style={styles.calcLeft}>
-                                    <View style={styles.userAvatar}>
-                                        <Text style={styles.avatarText}>{calc.userName.charAt(0)}</Text>
-                                    </View>
-                                    <View>
-                                        <Text style={styles.userName}>{calc.userName}</Text>
-                                        <Text style={styles.userDetail}>{calc.percentage.toFixed(0)}% da conta</Text>
-                                    </View>
-                                </View>
-                                <Text style={styles.amount}>{formatCurrency(calc.finalAmount)}</Text>
-                            </View>
-                        ))}
-                    </View>
-
-                    {/* Lista Detalhada de Itens */}
-                    <View style={styles.itemsList}>
-                        <View style={styles.sectionHeader}>
-                            <Ionicons name="list-outline" size={20} color={COLORS.text} />
-                            <Text style={styles.sectionTitle}>Itens Individuais</Text>
-                        </View>
-                        {expense.items && expense.items.map((item, index) => {
-                            const isMulti = item.assignedTo && item.assignedTo.length > 1;
-                            const assignedNames = item.assignedTo ? item.assignedTo.map(u => u.userName.split(' ')[0]).join(', ') : item.userName;
-                            const qty = item.quantity || 1;
-
-                            return (
-                                <View key={index} style={styles.itemRow}>
-                                    <View style={styles.itemInfo}>
-                                        <Text style={styles.itemDesc}>{qty}x {item.description}</Text>
-                                        <Text style={styles.itemUser}>
-                                            {isMulti ? `Dividido: ${assignedNames}` : `por ${assignedNames}`}
-                                        </Text>
-                                    </View>
-                                    <Text style={styles.itemAmount}>{formatCurrency(item.amount)}</Text>
-                                </View>
-                            );
-                        })}
-                    </View>
-
-                    {/* Botões de Ação */}
-                    {!isPaid && (
-                        <View style={styles.buttonRow}>
-                            <ScaleButton
-                                style={[styles.actionButton, styles.saveButton]}
-                                onPress={() => navigation.navigate('Home')}
-                                disabled={finalizing}
+                        {/* Resumo da Conta (Accordion) */}
+                        <View style={[styles.summaryBox, { overflow: 'hidden' }]}>
+                            <TouchableOpacity
+                                style={styles.summaryHeader}
+                                onPress={toggleSummary}
+                                activeOpacity={0.7}
                             >
-                                <Text style={[styles.buttonText, styles.saveButtonText]}>Voltar</Text>
-                            </ScaleButton>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                    <Ionicons name="receipt-outline" size={20} color={COLORS.primary} />
+                                    <Text style={styles.summaryTitle}>Resumo da Conta</Text>
+                                </View>
+                                <Ionicons
+                                    name={isSummaryCollapsed ? "chevron-down" : "chevron-up"}
+                                    size={20}
+                                    color={COLORS.textSecondary}
+                                />
+                            </TouchableOpacity>
 
-                            {(expense.status === 'draft' || expense.status === 'waiting_payment') && (
+                            <Animated.View style={summaryContentStyle}>
+                                <View style={styles.summaryContent}>
+                                    <View style={styles.summaryItem}>
+                                        <Text style={styles.summaryLabel}>Itens ({expense.items ? expense.items.length : 0})</Text>
+                                        <Text style={styles.summaryValue}>{formatCurrency(expense.items ? expense.items.reduce((a, b) => a + b.amount, 0) : 0)}</Text>
+                                    </View>
+                                    <View style={styles.summaryItem}>
+                                        <Text style={styles.summaryLabel}>Taxas & Entrega</Text>
+                                        <Text style={styles.summaryValue}>+ {formatCurrency(expense.deliveryFee + expense.serviceFee)}</Text>
+                                    </View>
+                                    <View style={styles.summaryItem}>
+                                        <Text style={styles.summaryLabel}>Descontos</Text>
+                                        <Text style={[styles.summaryValue, { color: COLORS.success }]}>- {formatCurrency(expense.discount)}</Text>
+                                    </View>
+                                    <View style={[styles.summaryItem, styles.totalRow]}>
+                                        <Text style={styles.totalLabel}>Total Geral</Text>
+                                        <Text style={styles.totalValue}>{formatCurrency(currentTotal)}</Text>
+                                    </View>
+
+                                    {expense.invoiceUrl && (
+                                        <TouchableOpacity style={styles.viewInvoiceBtn} onPress={() => setShowInvoiceModal(true)}>
+                                            <Ionicons name="image-outline" size={18} color={COLORS.primary} />
+                                            <Text style={styles.viewInvoiceText}>Ver Nota Fiscal</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+                            </Animated.View>
+                        </View>
+
+                        {/* Input de Itens */}
+                        {!isPaid && <ItemInput users={users} onAdd={handleAddItem} />}
+
+                        {/* Lista de Cálculos Proporcionais */}
+                        <View style={styles.sectionHeader}>
+                            <Ionicons name="people-outline" size={20} color={COLORS.text} />
+                            <Text style={styles.sectionTitle}>Divisão do Valor</Text>
+                        </View>
+                        <View style={styles.calculationsList}>
+                            {calculations.map((calc) => (
+                                <View key={calc.userId} style={styles.calcRow}>
+                                    <View style={styles.calcLeft}>
+                                        <View style={styles.userAvatar}>
+                                            <Text style={styles.avatarText}>{calc.userName.charAt(0)}</Text>
+                                        </View>
+                                        <View>
+                                            <Text style={styles.userName}>{calc.userName}</Text>
+                                            <Text style={styles.userDetail}>{calc.percentage.toFixed(0)}% da conta</Text>
+                                        </View>
+                                    </View>
+                                    <Text style={styles.amount}>{formatCurrency(calc.finalAmount)}</Text>
+                                </View>
+                            ))}
+                        </View>
+
+                        {/* Lista Detalhada de Itens */}
+                        <View style={styles.itemsList}>
+                            <View style={styles.sectionHeader}>
+                                <Ionicons name="list-outline" size={20} color={COLORS.text} />
+                                <Text style={styles.sectionTitle}>Itens Individuais</Text>
+                            </View>
+                            {expense.items && expense.items.map((item, index) => {
+                                const isMulti = item.assignedTo && item.assignedTo.length > 1;
+                                const assignedNames = item.assignedTo ? item.assignedTo.map(u => u.userName.split(' ')[0]).join(', ') : item.userName;
+                                const qty = item.quantity || 1;
+
+                                return (
+                                    <View key={index} style={styles.itemRow}>
+                                        <View style={styles.itemInfo}>
+                                            <Text style={styles.itemDesc}>{qty}x {item.description}</Text>
+                                            <Text style={styles.itemUser}>
+                                                {isMulti ? `Dividido: ${assignedNames}` : `por ${assignedNames}`}
+                                            </Text>
+                                        </View>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                            <Text style={styles.itemAmount}>{formatCurrency(item.amount)}</Text>
+                                            {canDelete && (
+                                                <TouchableOpacity
+                                                    onPress={() => {
+                                                        setItemToDelete(index);
+                                                        setDeleteConfirmVisible(true);
+                                                    }}
+                                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                                >
+                                                    <Ionicons name="trash-outline" size={18} color={COLORS.error} />
+                                                </TouchableOpacity>
+                                            )}
+                                        </View>
+                                    </View>
+                                );
+                            })}
+                        </View>
+
+                        {/* Botões de Ação */}
+                        {!isPaid && (
+                            <View style={styles.buttonRow}>
                                 <ScaleButton
-                                    style={[styles.actionButton, styles.finalizeButton, { opacity: finalizing ? 0.7 : 1 }]}
-                                    onPress={handleFinalize}
+                                    style={[styles.actionButton, styles.saveButton]}
+                                    onPress={() => navigation.navigate('Home')}
                                     disabled={finalizing}
                                 >
-                                    {finalizing ? (
-                                        <ActivityIndicator color='#FFF' />
-                                    ) : (
-                                        <Text style={styles.buttonText}>Finalizar</Text>
-                                    )}
+                                    <Text style={[styles.buttonText, styles.saveButtonText]}>Voltar</Text>
                                 </ScaleButton>
-                            )}
 
-                            <ScaleButton
-                                style={[styles.actionButton, styles.saveButton]}
-                                onPress={() => updateStatus('waiting_payment')}
-                            >
-                                <Text style={[styles.buttonText, styles.saveButtonText]}>Salvar</Text>
-                            </ScaleButton>
-                        </View>
-                    )}
+                                {(expense.status === 'draft' || expense.status === 'waiting_payment') && (
+                                    <ScaleButton
+                                        style={[styles.actionButton, styles.finalizeButton, { opacity: finalizing ? 0.7 : 1 }]}
+                                        onPress={handleFinalize}
+                                        disabled={finalizing}
+                                    >
+                                        {finalizing ? (
+                                            <ActivityIndicator color='#FFF' />
+                                        ) : (
+                                            <Text style={styles.buttonText}>Finalizar</Text>
+                                        )}
+                                    </ScaleButton>
+                                )}
 
-                    {isPaid && (
-                        <View style={styles.buttonRow}>
-                            <ScaleButton
-                                style={[styles.actionButton, styles.finalizeButton]}
-                                onPress={() => navigation.navigate('Home')}
+                                <ScaleButton
+                                    style={[styles.actionButton, styles.saveButton]}
+                                    onPress={() => updateStatus('waiting_payment')}
+                                >
+                                    <Text style={[styles.buttonText, styles.saveButtonText]}>Salvar</Text>
+                                </ScaleButton>
+                            </View>
+                        )}
+
+                        {/* Botão de Excluir Despesa (Zona de Perigo) */}
+                        {canDelete && (
+                            <TouchableOpacity
+                                onPress={() => setDeleteExpenseConfirmVisible(true)}
+                                style={styles.deleteExpenseButton}
                             >
-                                <Text style={styles.buttonText}>Voltar para Home</Text>
-                            </ScaleButton>
-                        </View>
-                    )}
+                                <Ionicons name="trash-outline" size={20} color={COLORS.error} />
+                                <Text style={styles.deleteExpenseText}>Excluir Despesa</Text>
+                            </TouchableOpacity>
+                        )}
+
+                        {isPaid && (
+                            <View style={styles.buttonRow}>
+                                <ScaleButton
+                                    style={[styles.actionButton, styles.finalizeButton]}
+                                    onPress={() => navigation.navigate('Home')}
+                                >
+                                    <Text style={styles.buttonText}>Voltar para Home</Text>
+                                </ScaleButton>
+                            </View>
+                        )}
+
+                    </View>
 
                 </ScrollView >
             </KeyboardAvoidingView>
@@ -521,6 +619,40 @@ export const AddItemsScreen = () => {
                 }}
             />
 
+            <CustomConfirmModal
+                visible={deleteConfirmVisible}
+                title="Excluir Item"
+                message="Tem certeza que deseja excluir este item? Esta ação não pode ser desfeita."
+                confirmText="Sim, Excluir"
+                cancelText="Cancelar"
+                onConfirm={() => {
+                    setDeleteConfirmVisible(false);
+                    if (itemToDelete !== null) {
+                        handleDeleteItem(itemToDelete);
+                        setItemToDelete(null);
+                    }
+                }}
+                onCancel={() => {
+                    setDeleteConfirmVisible(false);
+                    setItemToDelete(null);
+                }}
+            />
+
+            <CustomConfirmModal
+                visible={deleteExpenseConfirmVisible}
+                title="Excluir Despesa"
+                message="Tem certeza que deseja excluir esta despesa completa? Todos os itens serão perdidos e esta ação não pode ser desfeita."
+                confirmText="Sim, Excluir Tudo"
+                cancelText="Cancelar"
+                onConfirm={() => {
+                    setDeleteExpenseConfirmVisible(false);
+                    handleDeleteExpense();
+                }}
+                onCancel={() => {
+                    setDeleteExpenseConfirmVisible(false);
+                }}
+            />
+
             <StatusModal
                 visible={isStatusModalVisible}
                 currentStatus={expense.status}
@@ -558,30 +690,83 @@ export const AddItemsScreen = () => {
 };
 
 const styles = StyleSheet.create({
-    container: { flexGrow: 1, backgroundColor: '#F8FAFC', paddingHorizontal: 20 },
+    container: { flexGrow: 1, backgroundColor: '#F8FAFC', paddingHorizontal: 0 },
     center: { justifyContent: 'center', alignItems: 'center' },
+    headerGradient: {
+        paddingHorizontal: 20,
+        paddingBottom: 20,
+        borderBottomLeftRadius: 24,
+        borderBottomRightRadius: 24,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+        elevation: 8,
+        marginBottom: 16,
+    },
     headerRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 10,
     },
-    title: { fontSize: 26, fontWeight: '800', color: COLORS.text },
+    backButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    headerIconButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    statusBadgeWrapper: {
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    headerSubtitle: {
+        color: 'rgba(255,255,255,0.85)',
+        fontSize: 13,
+        fontWeight: '600',
+        marginTop: 4,
+    },
+    contentWrapper: {
+        paddingHorizontal: 20,
+    },
+    title: { fontSize: 22, fontWeight: '800', color: COLORS.text },
     receiverBanner: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
-        backgroundColor: COLORS.primary + '10',
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 8,
+        gap: 10,
+        backgroundColor: '#FFF',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderRadius: 16,
         marginBottom: 20,
-        alignSelf: 'flex-start',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 2,
+    },
+    receiverIconWrapper: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: COLORS.primary + '15',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     receiverText: {
-        fontSize: 13,
-        color: COLORS.primary,
-        fontWeight: '500',
+        fontSize: 14,
+        color: COLORS.text,
+        fontWeight: '600',
+        flex: 1,
     },
     summaryBox: {
         backgroundColor: '#FFF',
@@ -800,5 +985,23 @@ const styles = StyleSheet.create({
         width: '100%',
         backgroundColor: '#F1F5F9',
         borderRadius: 8,
+    },
+    deleteExpenseButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 16,
+        marginTop: 24,
+        marginBottom: 10,
+        backgroundColor: '#FEF2F2',
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#FECACA',
+        gap: 8,
+    },
+    deleteExpenseText: {
+        color: COLORS.error,
+        fontSize: 16,
+        fontWeight: '600',
     },
 });

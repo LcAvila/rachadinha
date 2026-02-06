@@ -87,6 +87,48 @@ export class AuthRepository implements IAuthRepository {
     }
 
     /**
+     * Busca usuários pelo nome, username ou email.
+     * @param searchQuery Termo de busca.
+     * @returns Lista de usuários encontrados.
+     */
+    async searchUsers(searchQuery: string): Promise<User[]> {
+        if (!searchQuery || searchQuery.length < 3) return [];
+
+        const usersRef = collection(db, FIREBASE_COLLECTIONS.USERS);
+        const normalizedQuery = searchQuery.toLowerCase();
+
+        // Nota: O Firestore não suporta busca "LIKE" nativa de forma eficiente para substrings no meio.
+        // Faremos uma busca por prefixo (startAt/endAt) se possível, ou client-side filtering para MVP.
+        // Para este MVP, vamos buscar todos e filtrar (não ideal para produção em escala, mas ok para teste).
+        // Em produção, usaríamos Algolia ou Typesense.
+
+        const q = query(usersRef); // Trazendo todos por enquanto (MVP)
+        const querySnapshot = await getDocs(q);
+
+        const users: User[] = [];
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            const name = data.name?.toLowerCase() || '';
+            const username = data.username?.toLowerCase() || '';
+            const email = data.email?.toLowerCase() || '';
+
+            if (name.includes(normalizedQuery) || username.includes(normalizedQuery) || email.includes(normalizedQuery)) {
+                users.push({
+                    id: doc.id,
+                    name: data.name,
+                    email: data.email,
+                    username: data.username,
+                    nickname: data.nickname,
+                    photoUrl: data.photoUrl,
+                    createdAt: data.createdAt?.toDate() || new Date(),
+                } as User);
+            }
+        });
+
+        return users;
+    }
+
+    /**
      * Registra um novo usuário.
      * Cria a conta no Firebase Auth e o registro correspondente no Firestore.
      * @param email Email.

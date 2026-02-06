@@ -31,6 +31,13 @@ export interface IAuthRepository {
     checkUsernameAvailability(username: string): Promise<boolean>;
 
     /**
+     * Busca usuários pelo nome, username ou email.
+     * @param searchQuery Termo de busca.
+     * @returns Uma promessa com a lista de usuários encontrados.
+     */
+    searchUsers(searchQuery: string): Promise<User[]>;
+
+    /**
      * Atualiza os dados do perfil do usuário.
      * @param userId ID do usuário.
      * @param data Objeto parcial com os dados a serem atualizados.

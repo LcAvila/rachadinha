@@ -107,23 +107,35 @@ export const FinancialScreen = () => {
                         {/* Cartão de Visão Geral */}
                         <Animated.View entering={FadeInDown.delay(100).springify()}>
                             <LinearGradient
-                                colors={[COLORS.primary, '#4F46E5']}
+                                colors={[COLORS.primary, '#10B981', '#059669']}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 1 }}
                                 style={styles.overviewCard}
                             >
+                                {/* Elementos decorativos de fundo */}
+                                <View style={styles.decorativeCircle1} />
+                                <View style={styles.decorativeCircle2} />
+
                                 <View style={styles.overviewHeader}>
-                                    <Text style={styles.overviewLabel}>Total Gasto</Text>
+                                    <View>
+                                        <Text style={styles.overviewLabel}>Total Gasto</Text>
+                                        <Text style={styles.overviewPeriod}>{renderPeriodLabel()}</Text>
+                                    </View>
                                     <View style={styles.iconBadge}>
-                                        <Ionicons name="wallet-outline" size={16} color="#FFF" />
+                                        <Ionicons name="wallet" size={20} color="#FFF" />
                                     </View>
                                 </View>
 
                                 <Text style={styles.overviewValue}>{formatCurrency(stats.totalSpent)}</Text>
 
-                                <View style={styles.overviewRow}>
-                                    <Ionicons name="receipt-outline" size={14} color="rgba(255,255,255,0.8)" />
-                                    <Text style={styles.overviewSub}>{stats.rachadinhaTotal} rachadinhas</Text>
+                                <View style={styles.overviewFooter}>
+                                    <View style={styles.overviewRow}>
+                                        <Ionicons name="receipt" size={16} color="rgba(255,255,255,0.9)" />
+                                        <Text style={styles.overviewSub}>{stats.rachadinhaTotal} rachadinhas</Text>
+                                    </View>
+                                    <View style={styles.trendBadge}>
+                                        <Ionicons name="trending-up" size={12} color="#10B981" />
+                                    </View>
                                 </View>
                             </LinearGradient>
                         </Animated.View>
@@ -274,47 +286,94 @@ const styles = StyleSheet.create({
         paddingTop: 8,
     },
     overviewCard: {
-        borderRadius: 24,
-        padding: 24,
+        borderRadius: 28,
+        padding: 28,
         marginBottom: 32,
         shadowColor: COLORS.primary,
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.3,
-        shadowRadius: 15,
-        elevation: 8,
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.4,
+        shadowRadius: 20,
+        elevation: 12,
+        overflow: 'hidden',
+        position: 'relative',
+    },
+    decorativeCircle1: {
+        position: 'absolute',
+        width: 150,
+        height: 150,
+        borderRadius: 75,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        top: -50,
+        right: -30,
+    },
+    decorativeCircle2: {
+        position: 'absolute',
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        backgroundColor: 'rgba(255,255,255,0.08)',
+        bottom: -20,
+        left: -20,
     },
     overviewHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 12,
+        alignItems: 'flex-start',
+        marginBottom: 20,
+        zIndex: 1,
     },
     overviewLabel: {
-        color: 'rgba(255,255,255,0.9)',
-        fontSize: 16,
+        color: 'rgba(255,255,255,0.95)',
+        fontSize: 15,
         fontWeight: '600',
+        letterSpacing: 0.5,
+    },
+    overviewPeriod: {
+        color: 'rgba(255,255,255,0.7)',
+        fontSize: 12,
+        fontWeight: '500',
+        marginTop: 2,
     },
     iconBadge: {
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        borderRadius: 12,
-        padding: 6,
+        backgroundColor: 'rgba(255,255,255,0.25)',
+        borderRadius: 16,
+        padding: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
     },
     overviewValue: {
         color: '#FFF',
-        fontSize: 40,
+        fontSize: 48,
         fontWeight: '900',
-        marginBottom: 16,
-        letterSpacing: -1,
+        marginBottom: 20,
+        letterSpacing: -2,
+        zIndex: 1,
+        textShadowColor: 'rgba(0,0,0,0.2)',
+        textShadowOffset: { width: 0, height: 2 },
+        textShadowRadius: 4,
+    },
+    overviewFooter: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        zIndex: 1,
     },
     overviewRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
+        gap: 8,
     },
     overviewSub: {
-        color: 'rgba(255,255,255,0.8)',
+        color: 'rgba(255,255,255,0.9)',
         fontSize: 14,
-        fontWeight: '500',
+        fontWeight: '600',
+    },
+    trendBadge: {
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        borderRadius: 12,
+        padding: 6,
     },
     chartContainer: {
         marginBottom: 32,

@@ -12,13 +12,15 @@ import {
     orderBy,
     increment,
     deleteDoc,
-    writeBatch
+    writeBatch,
+    arrayRemove
 } from 'firebase/firestore';
 import { db } from './config';
 import { IExpenseRepository } from '../../domain/repositories/IExpenseRepository';
 import { Expense } from '../../domain/entities/Expense';
 import { ExpenseItem } from '../../domain/entities/ExpenseItem';
-import { PendingPayment } from '../../domain/entities/PendingPayment';
+import { PendingPayment, PaymentStatus } from '../../domain/entities/PendingPayment';
+import { ExpenseParticipant, ParticipantStatus } from '../../domain/entities/ExpenseParticipant';
 import { User } from '../../domain/entities/User';
 import { FIREBASE_COLLECTIONS } from '../../core/constants/constants';
 
@@ -65,6 +67,7 @@ export class ExpenseRepository implements IExpenseRepository {
                 ...data,
                 items: data.items || [],
                 involvedUserIds: data.involvedUserIds || [],
+                participants: data.participants || [],
                 createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt),
                 finalizedAt: data.finalizedAt instanceof Timestamp ? data.finalizedAt.toDate() : data.finalizedAt ? new Date(data.finalizedAt) : undefined
             } as Expense;
@@ -105,6 +108,81 @@ export class ExpenseRepository implements IExpenseRepository {
     }
 
     /**
+     * Remove um item da despesa e atualiza totais.
+     * @param expenseId ID da despesa.
+     * @param itemIndex Índice do item a remover.
+     */
+    async deleteExpenseItem(expenseId: string, itemIndex: number): Promise<void> {
+        const expense = await this.getExpense(expenseId);
+        if (!expense) throw new Error('Despesa não encontrada');
+
+        const itemToRemove = expense.items[itemIndex];
+        if (!itemToRemove) throw new Error('Item não encontrado');
+
+        // Remove o item do array
+        const updatedItems = expense.items.filter((_, index) => index !== itemIndex);
+
+        // Recalcula involvedUserIds
+        const involvedIds = new Set<string>([expense.createdBy]);
+        updatedItems.forEach(item => {
+            item.assignedTo?.forEach(user => involvedIds.add(user.userId));
+        });
+
+        // Recalcula total
+        const newTotal = updatedItems.reduce((sum, item) => sum + item.amount, 0);
+
+        const docRef = doc(db, FIREBASE_COLLECTIONS.EXPENSES, expenseId);
+        await updateDoc(docRef, {
+            items: updatedItems,
+            involvedUserIds: Array.from(involvedIds),
+            totalAmount: newTotal + expense.deliveryFee + expense.serviceFee - expense.discount
+        });
+    }
+
+    /**
+     * Atualiza o status de aceitação de um participante.
+     * @param expenseId ID da despesa.
+     * @param userId ID do usuário participante.
+     * @param status Novo status.
+     */
+    async updateExpenseParticipantStatus(
+        expenseId: string,
+        userId: string,
+        status: ParticipantStatus
+    ): Promise<void> {
+        const expense = await this.getExpense(expenseId);
+        if (!expense) throw new Error('Despesa não encontrada');
+
+        const participants = expense.participants || [];
+        const participantIndex = participants.findIndex(p => p.userId === userId);
+
+        if (participantIndex === -1) {
+            throw new Error('Participante não encontrado');
+        }
+
+        const updatedParticipant: ExpenseParticipant = {
+            ...participants[participantIndex],
+            status,
+            acceptedAt: status === 'accepted' ? new Date() : undefined,
+            rejectedAt: status === 'rejected' ? new Date() : undefined
+        };
+
+        participants[participantIndex] = updatedParticipant;
+
+        // Se rejeitado, remove dos involvedUserIds
+        let involvedUserIds = expense.involvedUserIds;
+        if (status === 'rejected') {
+            involvedUserIds = involvedUserIds.filter(id => id !== userId);
+        }
+
+        const docRef = doc(db, FIREBASE_COLLECTIONS.EXPENSES, expenseId);
+        await updateDoc(docRef, {
+            participants,
+            involvedUserIds
+        });
+    }
+
+    /**
      * Marca a despesa como finalizada e define a data de finalização.
      */
     async finalizeExpense(expenseId: string): Promise<void> {
@@ -132,6 +210,7 @@ export class ExpenseRepository implements IExpenseRepository {
                 id: doc.id,
                 ...data,
                 items: data.items || [],
+                participants: data.participants || [],
                 createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt),
                 finalizedAt: data.finalizedAt instanceof Timestamp ? data.finalizedAt.toDate() : undefined
             } as Expense;
@@ -165,14 +244,14 @@ export class ExpenseRepository implements IExpenseRepository {
         const toReceiveQuery = query(
             collection(db, FIREBASE_COLLECTIONS.PENDING_PAYMENTS),
             where('toUserId', '==', userId),
-            where('paid', '==', false)
+            where('paymentStatus', '==', 'pending')
         );
 
         // Busca o que o usuário tem a pagar
         const toPayQuery = query(
             collection(db, FIREBASE_COLLECTIONS.PENDING_PAYMENTS),
             where('fromUserId', '==', userId),
-            where('paid', '==', false)
+            where('paymentStatus', '==', 'pending')
         );
 
         // Executa em paralelo
@@ -189,12 +268,54 @@ export class ExpenseRepository implements IExpenseRepository {
 
     /**
      * Marca um pagamento como realizado.
+     * @deprecated Use updatePendingPaymentStatus instead
      */
     async markPaymentAsPaid(paymentId: string): Promise<void> {
         const docRef = doc(db, FIREBASE_COLLECTIONS.PENDING_PAYMENTS, paymentId);
         await updateDoc(docRef, {
             paid: true,
+            paymentStatus: 'paid',
             paidAt: new Date()
+        });
+    }
+
+    /**
+     * Atualiza o status de um pagamento pendente.
+     * @param paymentId ID do pagamento.
+     * @param status Novo status.
+     * @param markedBy ID do usuário que marcou.
+     */
+    async updatePendingPaymentStatus(
+        paymentId: string,
+        status: PaymentStatus,
+        markedBy: string
+    ): Promise<void> {
+        const docRef = doc(db, FIREBASE_COLLECTIONS.PENDING_PAYMENTS, paymentId);
+        await updateDoc(docRef, {
+            paymentStatus: status,
+            paid: status === 'paid',
+            markedPaidBy: markedBy,
+            paidAt: status === 'paid' ? new Date() : null
+        });
+    }
+
+    /**
+     * Verifica se todos os pagamentos de uma despesa foram pagos.
+     * @param expenseId ID da despesa.
+     * @returns true se todos os pagamentos foram pagos.
+     */
+    async checkAllPaymentsPaid(expenseId: string): Promise<boolean> {
+        const q = query(
+            collection(db, FIREBASE_COLLECTIONS.PENDING_PAYMENTS),
+            where('expenseId', '==', expenseId)
+        );
+        const snapshot = await getDocs(q);
+
+        if (snapshot.empty) return false;
+
+        return snapshot.docs.every(doc => {
+            const data = doc.data();
+            return data.paymentStatus === 'paid' || data.paid === true;
         });
     }
 
