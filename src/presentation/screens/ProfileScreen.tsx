@@ -31,6 +31,10 @@ export const ProfileScreen = () => {
     const [nickname, setNickname] = useState('');
     const [username, setUsername] = useState('');
     const [bio, setBio] = useState('');
+    const [phone, setPhone] = useState('');
+    const [pixKey, setPixKey] = useState('');
+    const [birthDate, setBirthDate] = useState('');
+    const [location, setLocation] = useState('');
 
     // Estados de UI e Processamento
     const [loading, setLoading] = useState(false);
@@ -50,6 +54,10 @@ export const ProfileScreen = () => {
         setNickname(currentUser?.nickname || '');
         setUsername(currentUser?.username || '');
         setBio(currentUser?.bio || '');
+        setPhone(currentUser?.phone || '');
+        setPixKey(currentUser?.pixKey || '');
+        setBirthDate(currentUser?.birthDate || '');
+        setLocation(currentUser?.location || '');
     };
 
     /**
@@ -106,7 +114,7 @@ export const ProfileScreen = () => {
     };
 
     /**
-     * Salva as alterações do perfil (apelido, username, bio).
+     * Salva as alterações do perfil (apelido, username, bio, phone, pixKey, birthDate, location).
      */
     const handleSave = async () => {
         if (!user) return;
@@ -122,8 +130,8 @@ export const ProfileScreen = () => {
                 }
             }
 
-            await authRepo.updateProfile(user.id, { nickname, bio, username });
-            setUser({ ...user, nickname, bio, username });
+            await authRepo.updateProfile(user.id, { nickname, bio, username, phone, pixKey, birthDate, location });
+            setUser({ ...user, nickname, bio, username, phone, pixKey, birthDate, location });
             setIsEditing(false);
             setToast({ visible: true, message: 'Perfil atualizado com sucesso! ✨', type: 'success' });
         } catch (error) {
@@ -197,6 +205,28 @@ export const ProfileScreen = () => {
                             <Text style={styles.name}>Nome: {user.name}</Text>
                             <Text style={styles.email}>{user.email}</Text>
                             {user.bio && <Text style={styles.bio}>{user.bio}</Text>}
+
+                            <View style={styles.extraInfoGrid}>
+                                {user.phone && (
+                                    <View style={styles.infoTag}>
+                                        <Ionicons name="call-outline" size={14} color={COLORS.primary} />
+                                        <Text style={styles.infoTagText}>{user.phone}</Text>
+                                    </View>
+                                )}
+                                {user.pixKey && (
+                                    <View style={styles.infoTag}>
+                                        <Ionicons name="card-outline" size={14} color={COLORS.primary} />
+                                        <Text style={styles.infoTagText}>PIX</Text>
+                                    </View>
+                                )}
+                                {user.location && (
+                                    <View style={styles.infoTag}>
+                                        <Ionicons name="location-outline" size={14} color={COLORS.primary} />
+                                        <Text style={styles.infoTagText}>{user.location}</Text>
+                                    </View>
+                                )}
+                            </View>
+
                             <TouchableOpacity onPress={() => setIsEditing(true)} style={styles.editButton}>
                                 <Ionicons name="pencil" size={16} color={COLORS.primary} />
                                 <Text style={styles.editButtonText}>Editar Perfil</Text>
@@ -232,6 +262,51 @@ export const ProfileScreen = () => {
                                     value={nickname}
                                     onChangeText={setNickname}
                                     placeholder="Como deseja ser chamado?"
+                                    placeholderTextColor={COLORS.textSecondary}
+                                />
+                            </View>
+
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.label}>Telefone</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    value={phone}
+                                    onChangeText={setPhone}
+                                    placeholder="(00) 00000-0000"
+                                    placeholderTextColor={COLORS.textSecondary}
+                                    keyboardType="phone-pad"
+                                />
+                            </View>
+
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.label}>Chave PIX</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    value={pixKey}
+                                    onChangeText={setPixKey}
+                                    placeholder="CPF, Email ou Celular"
+                                    placeholderTextColor={COLORS.textSecondary}
+                                />
+                            </View>
+
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.label}>Data de Nascimento</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    value={birthDate}
+                                    onChangeText={setBirthDate}
+                                    placeholder="DD/MM/AAAA"
+                                    placeholderTextColor={COLORS.textSecondary}
+                                />
+                            </View>
+
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.label}>Localização</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    value={location}
+                                    onChangeText={setLocation}
+                                    placeholder="Sua cidade"
                                     placeholderTextColor={COLORS.textSecondary}
                                 />
                             </View>
@@ -397,6 +472,28 @@ const styles = StyleSheet.create({
     infoContainer: {
         alignItems: 'center',
         paddingHorizontal: 24,
+    },
+    extraInfoGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'center',
+        gap: 8,
+        marginTop: 12,
+        marginBottom: 24,
+    },
+    infoTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F1F5F9',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        gap: 6,
+    },
+    infoTagText: {
+        fontSize: 12,
+        color: COLORS.text,
+        fontWeight: '600',
     },
     displayName: {
         fontSize: 26,

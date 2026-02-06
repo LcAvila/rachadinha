@@ -61,6 +61,10 @@ export class AuthRepository implements IAuthRepository {
                 bio: data.bio,
                 photoUrl: data.photoUrl,
                 pushToken: data.pushToken,
+                phone: data.phone,
+                pixKey: data.pixKey,
+                birthDate: data.birthDate,
+                location: data.location,
                 // Conversão segura de datas
                 createdAt: data.createdAt?.toDate() || new Date(),
             };
@@ -171,6 +175,10 @@ export class AuthRepository implements IAuthRepository {
                                 bio: data.bio,
                                 photoUrl: data.photoUrl,
                                 pushToken: data.pushToken,
+                                phone: data.phone,
+                                pixKey: data.pixKey,
+                                birthDate: data.birthDate,
+                                location: data.location,
                                 createdAt: data.createdAt?.toDate() || new Date(),
                             });
                         } else {

@@ -51,6 +51,30 @@ export interface User {
     pushToken?: string;
 
     /**
+     * Telefone de contato do usuário.
+     * @optional
+     */
+    phone?: string;
+
+    /**
+     * Chave PIX para recebimento de pagamentos.
+     * @optional
+     */
+    pixKey?: string;
+
+    /**
+     * Data de nascimento do usuário.
+     * @optional
+     */
+    birthDate?: string;
+
+    /**
+     * Localização ou cidade do usuário.
+     * @optional
+     */
+    location?: string;
+
+    /**
      * Data de criação da conta do usuário.
      */
     createdAt: Date;

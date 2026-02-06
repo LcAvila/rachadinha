@@ -10,7 +10,8 @@ import {
     KeyboardAvoidingView,
     Platform,
     Image,
-    ScrollView
+    ScrollView,
+    Dimensions
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -19,27 +20,86 @@ import { RootStackParamList } from '../navigation/types';
 import { AuthRepository } from '../../infrastructure/firebase/AuthRepository';
 import { LoginUseCase } from '../../application/usecases/auth/LoginUseCase';
 import { RegisterUseCase } from '../../application/usecases/auth/RegisterUseCase';
-import Animated, { FadeInUp } from 'react-native-reanimated';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { auth } from '../../infrastructure/firebase/config';
+import Animated, {
+    FadeInUp,
+    FadeInDown,
+    useSharedValue,
+    useAnimatedStyle,
+    withRepeat,
+    withTiming,
+    Easing,
+    withDelay
+} from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../core/constants/constants';
 import { Toast } from '../components/Toast';
 import { AnimatedButton } from '../components/AnimatedButton';
+import { LinearGradient } from 'expo-linear-gradient';
+
+const { width, height } = Dimensions.get('window');
 
 type LoginScreenProp = StackNavigationProp<RootStackParamList, 'Login'>;
 
 /**
+ * Componente interno para as formas animadas do fundo.
+ */
+const AnimatedBlob = ({ delay, color, size, initialPos }: { delay: number, color: string, size: number, initialPos: { x: number, y: number } }) => {
+    const translateX = useSharedValue(initialPos.x);
+    const translateY = useSharedValue(initialPos.y);
+    const scale = useSharedValue(1);
+
+    useEffect(() => {
+        translateX.value = withDelay(delay, withRepeat(
+            withTiming(initialPos.x + 50, { duration: 5000, easing: Easing.inOut(Easing.sin) }),
+            -1,
+            true
+        ));
+        translateY.value = withDelay(delay, withRepeat(
+            withTiming(initialPos.y - 70, { duration: 7000, easing: Easing.inOut(Easing.sin) }),
+            -1,
+            true
+        ));
+        scale.value = withDelay(delay, withRepeat(
+            withTiming(1.2, { duration: 4000, easing: Easing.inOut(Easing.sin) }),
+            -1,
+            true
+        ));
+    }, []);
+
+    const animatedStyle = useAnimatedStyle(() => ({
+        transform: [
+            { translateX: translateX.value },
+            { translateY: translateY.value },
+            { scale: scale.value }
+        ],
+    }));
+
+    return (
+        <Animated.View
+            style={[
+                styles.blob,
+                { backgroundColor: color, width: size, height: size, borderRadius: size / 2 },
+                animatedStyle
+            ]}
+        />
+    );
+};
+
+/**
  * @component LoginScreen
- * Tela unificada de Autenticação (Login e Cadastro).
- * Permite que o usuário entre na aplicação ou crie uma nova conta.
+ * Tela unificada de Autenticação com Background Animado.
  */
 export const LoginScreen = () => {
     const navigation = useNavigation<LoginScreenProp>();
     const insets = useSafeAreaInsets();
 
     // Estados do formulário
-    const [isLogin, setIsLogin] = useState(true); // Toggle entre Login e Cadastro
+    const [isLogin, setIsLogin] = useState(true);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [name, setName] = useState('');
     const [username, setUsername] = useState('');
 
@@ -48,165 +108,229 @@ export const LoginScreen = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [toast, setToast] = useState({ visible: false, message: '', type: 'info' as 'success' | 'error' | 'info' });
 
-    // Instância das dependências (Repositories e UseCases)
     const authRepo = new AuthRepository();
     const loginUseCase = new LoginUseCase(authRepo);
     const registerUseCase = new RegisterUseCase(authRepo);
 
-    /**
-     * Lida com a submissão do formulário (Login ou Cadastro).
-     * Realiza validações básicas e chama os casos de uso apropriados.
-     */
     const handleAuth = async () => {
-        // Validação de campos obrigatórios
         if (!email || !password) {
             setToast({ visible: true, message: 'Preencha todos os campos 🧐', type: 'error' });
             return;
         }
-        if (!isLogin && (!name || !username)) {
-            setToast({ visible: true, message: 'Preencha nome e usuário 😊', type: 'error' });
-            return;
+
+        if (!isLogin) {
+            if (!name || !username) {
+                setToast({ visible: true, message: 'Preencha nome e usuário 😊', type: 'error' });
+                return;
+            }
+            if (password !== confirmPassword) {
+                setToast({ visible: true, message: 'As senhas não coincidem ❌', type: 'error' });
+                return;
+            }
+            if (password.length < 6) {
+                setToast({ visible: true, message: 'A senha deve ter pelo menos 6 caracteres 🔑', type: 'error' });
+                return;
+            }
         }
 
         setLoading(true);
         try {
             if (isLogin) {
-                // Fluxo de Login
                 await loginUseCase.execute(email, password);
-                setToast({ visible: true, message: 'Login realizado com sucesso! 🎉', type: 'success' });
+                setToast({ visible: true, message: 'Bem-vindo de volta! 🎉', type: 'success' });
             } else {
-                // Fluxo de Cadastro
                 await registerUseCase.execute(email, password, name, username);
                 setToast({ visible: true, message: 'Sua conta foi criada com sucesso! 🎉', type: 'success' });
             }
         } catch (error: any) {
             console.error('Erro de autenticação:', error);
-
-            // Tratamento de erros comuns do Firebase Auth
             let message = 'Algo deu errado. Tente novamente.';
             if (error.code === 'auth/invalid-email') message = 'O e-mail digitado não é válido. 📧';
-            if (error.code === 'auth/user-not-found') message = 'Usuário não encontrado. Crie uma conta! 👤';
+            if (error.code === 'auth/user-not-found' || error.message === 'auth/user-not-found') message = 'Usuário não encontrado. Crie uma conta! 👤';
             if (error.code === 'auth/wrong-password') message = 'Senha incorreta. Tente de novo! 🔑';
             if (error.code === 'auth/email-already-in-use') message = 'Esse e-mail já está em uso. Faça login! 😉';
-
+            if (error.code === 'auth/invalid-credential') message = 'Credenciais inválidas. Verifique seus dados. 🧐';
             setToast({ visible: true, message, type: 'error' });
         } finally {
             setLoading(false);
         }
     };
 
+    const handleForgotPassword = async () => {
+        if (!email || !email.includes('@')) {
+            setToast({ visible: true, message: 'Insira um e-mail válido primeiro! 📧', type: 'info' });
+            return;
+        }
+        try {
+            await sendPasswordResetEmail(auth, email);
+            setToast({ visible: true, message: 'E-mail de recuperação enviado! Verifique sua caixa de entrada. 📩', type: 'success' });
+        } catch (error: any) {
+            setToast({ visible: true, message: 'Erro ao enviar e-mail. Tente novamente.', type: 'error' });
+        }
+    };
+
     return (
-        <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.container}
-        >
-            <ScrollView contentContainerStyle={{ flexGrow: 1, paddingTop: insets.top, paddingBottom: insets.bottom }} showsVerticalScrollIndicator={false}>
-                <View style={styles.content}>
-                    {/* Animação de entrada do Logo */}
-                    <Animated.View entering={FadeInUp.delay(200).duration(800)} style={styles.header}>
-                        <View style={styles.logoContainer}>
-                            <Image
-                                source={require('../../../assets/logo.png')}
-                                style={styles.logoImage}
-                                resizeMode="contain"
-                            />
-                        </View>
-                    </Animated.View>
-
-                    {/* Animação de entrada do Formulário */}
-                    <Animated.View entering={FadeInUp.delay(400).duration(800)} style={styles.formContainer}>
-                        {/* Campos específicos de cadastro */}
-                        {!isLogin && (
-                            <View style={styles.inputContainer}>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Nome"
-                                    placeholderTextColor={COLORS.textSecondary}
-                                    value={name}
-                                    onChangeText={setName}
-                                />
-                            </View>
-                        )}
-
-                        {!isLogin && (
-                            <View style={styles.inputContainer}>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Nome de Usuário"
-                                    placeholderTextColor={COLORS.textSecondary}
-                                    value={username}
-                                    onChangeText={setUsername}
-                                    autoCapitalize="none"
-                                />
-                            </View>
-                        )}
-
-                        <View style={styles.inputContainer}>
-                            <TextInput
-                                style={styles.input}
-                                placeholder={isLogin ? "Usuário ou Email" : "Email"}
-                                placeholderTextColor={COLORS.textSecondary}
-                                value={email}
-                                onChangeText={setEmail}
-                                autoCapitalize="none"
-                                keyboardType={isLogin ? "default" : "email-address"}
-                            />
-                        </View>
-
-                        <View style={styles.inputContainer}>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Senha"
-                                placeholderTextColor={COLORS.textSecondary}
-                                value={password}
-                                onChangeText={setPassword}
-                                secureTextEntry={!showPassword}
-                            />
-                            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
-                                <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={COLORS.textSecondary} />
-                            </TouchableOpacity>
-                        </View>
-
-                        {/* Botão Principal com Animação de Loading */}
-                        <AnimatedButton
-                            variant="primary"
-                            title={isLogin ? 'Entrar' : 'Cadastrar'}
-                            onPress={handleAuth}
-                            loading={loading}
-                            disabled={loading}
-                        />
-
-                        {/* Botão para alternar entre login e cadastro */}
-                        <TouchableOpacity onPress={() => setIsLogin(!isLogin)} style={styles.footerButton}>
-                            <Text style={styles.footerText}>
-                                {isLogin ? 'Criar conta' : 'Já possui conta? Entrar'}
-                            </Text>
-                        </TouchableOpacity>
-                    </Animated.View>
-
-                    {/* Placeholder para Login Social (Futuro) */}
-                    <View style={styles.socialContainer}>
-                        <Ionicons name="logo-google" size={24} color="#9CA3AF" style={styles.socialIcon} />
-                        <Ionicons name="logo-facebook" size={24} color="#9CA3AF" style={styles.socialIcon} />
-                        <Ionicons name="logo-apple" size={24} color="#9CA3AF" style={styles.socialIcon} />
-                    </View>
-                </View>
-            </ScrollView>
-
-            <Toast
-                visible={toast.visible}
-                message={toast.message}
-                type={toast.type}
-                onHide={() => setToast({ ...toast, visible: false })}
+        <View style={styles.container}>
+            {/* Background Animado */}
+            <LinearGradient
+                colors={['#F8FAFC', '#E2E8F0', '#CBD5E1']}
+                style={StyleSheet.absoluteFill}
             />
-        </KeyboardAvoidingView >
+            <View style={styles.blobsContainer}>
+                <AnimatedBlob delay={0} color={COLORS.primary + '15'} size={300} initialPos={{ x: -100, y: -50 }} />
+                <AnimatedBlob delay={1000} color={COLORS.accent + '15'} size={250} initialPos={{ x: width - 150, y: height / 3 }} />
+                <AnimatedBlob delay={2000} color={COLORS.primary + '10'} size={350} initialPos={{ x: -150, y: height - 200 }} />
+            </View>
+
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={{ flex: 1 }}
+            >
+                <ScrollView
+                    contentContainerStyle={{ flexGrow: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    <View style={styles.content}>
+                        {/* Header com Logo */}
+                        <Animated.View entering={FadeInUp.delay(200).duration(800)} style={styles.header}>
+                            <View style={styles.logoWrapper}>
+                                <View style={styles.logoContainer}>
+                                    <Image
+                                        source={require('../../../assets/logo_backup.png')}
+                                        style={styles.logoImage}
+                                        resizeMode="contain"
+                                    />
+                                </View>
+                            </View>
+                            <Text style={styles.brandingText}>Rachadinha</Text>
+                            <Text style={styles.subBrandingText}>Divida contas, multiplique momentos</Text>
+                        </Animated.View>
+
+                        {/* Formulário */}
+                        <Animated.View entering={FadeInDown.delay(400).duration(800)} style={styles.formContainer}>
+                            <View style={styles.card}>
+                                {!isLogin && (
+                                    <View style={styles.inputWrapper}>
+                                        <Ionicons name="person-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
+                                        <TextInput
+                                            style={styles.input}
+                                            placeholder="Nome Completo"
+                                            placeholderTextColor={COLORS.textSecondary}
+                                            value={name}
+                                            onChangeText={setName}
+                                        />
+                                    </View>
+                                )}
+
+                                {!isLogin && (
+                                    <View style={styles.inputWrapper}>
+                                        <Ionicons name="at-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
+                                        <TextInput
+                                            style={styles.input}
+                                            placeholder="Nome de Usuário"
+                                            placeholderTextColor={COLORS.textSecondary}
+                                            value={username}
+                                            onChangeText={(text) => setUsername(text.toLowerCase().replace(/[^a-z0-9_.]/g, ''))}
+                                            autoCapitalize="none"
+                                        />
+                                    </View>
+                                )}
+
+                                <View style={styles.inputWrapper}>
+                                    <Ionicons name="mail-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder={isLogin ? "Usuário ou Email" : "Email"}
+                                        placeholderTextColor={COLORS.textSecondary}
+                                        value={email}
+                                        onChangeText={setEmail}
+                                        autoCapitalize="none"
+                                        keyboardType={isLogin ? "default" : "email-address"}
+                                    />
+                                </View>
+
+                                <View style={styles.inputWrapper}>
+                                    <Ionicons name="lock-closed-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="Senha"
+                                        placeholderTextColor={COLORS.textSecondary}
+                                        value={password}
+                                        onChangeText={setPassword}
+                                        secureTextEntry={!showPassword}
+                                    />
+                                    <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
+                                        <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={COLORS.textSecondary} />
+                                    </TouchableOpacity>
+                                </View>
+
+                                {!isLogin && (
+                                    <View style={styles.inputWrapper}>
+                                        <Ionicons name="shield-checkmark-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
+                                        <TextInput
+                                            style={styles.input}
+                                            placeholder="Confirmar Senha"
+                                            placeholderTextColor={COLORS.textSecondary}
+                                            value={confirmPassword}
+                                            onChangeText={setConfirmPassword}
+                                            secureTextEntry={!showPassword}
+                                        />
+                                    </View>
+                                )}
+
+                                {isLogin && (
+                                    <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotPasswordButton}>
+                                        <Text style={styles.forgotPasswordText}>Esqueceu a senha?</Text>
+                                    </TouchableOpacity>
+                                )}
+
+                                <AnimatedButton
+                                    variant="primary"
+                                    title={isLogin ? 'Entrar' : 'Criar Conta'}
+                                    onPress={handleAuth}
+                                    loading={loading}
+                                    disabled={loading}
+                                    style={styles.mainButton}
+                                />
+                            </View>
+
+                            <TouchableOpacity onPress={() => {
+                                setIsLogin(!isLogin);
+                                setPassword('');
+                                setConfirmPassword('');
+                            }} style={styles.toggleButton}>
+                                <Text style={styles.toggleText}>
+                                    {isLogin ? 'Não tem uma conta? ' : 'Já tem uma conta? '}
+                                    <Text style={styles.toggleTextBold}>{isLogin ? 'Cadastre-se' : 'Faça login'}</Text>
+                                </Text>
+                            </TouchableOpacity>
+                        </Animated.View>
+                    </View>
+                </ScrollView>
+
+                <Toast
+                    visible={toast.visible}
+                    message={toast.message}
+                    type={toast.type}
+                    onHide={() => setToast({ ...toast, visible: false })}
+                />
+            </KeyboardAvoidingView>
+        </View>
     );
 };
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: COLORS.background, // Fundo claro/branco
+        backgroundColor: COLORS.background,
+    },
+    blobsContainer: {
+        ...StyleSheet.absoluteFillObject,
+        overflow: 'hidden',
+    },
+    blob: {
+        position: 'absolute',
     },
     content: {
         flex: 1,
@@ -215,100 +339,108 @@ const styles = StyleSheet.create({
     },
     header: {
         alignItems: 'center',
-        marginBottom: 40,
+        marginBottom: 32,
+    },
+    logoWrapper: {
+        padding: 5,
+        borderRadius: 35,
+        backgroundColor: 'rgba(255, 255, 255, 0.5)',
+        marginBottom: 16,
     },
     logoContainer: {
-        width: 150,
-        height: 150,
+        width: 100,
+        height: 100,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 10,
+        backgroundColor: '#FFF',
+        borderRadius: 30,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+        elevation: 10,
     },
     logoImage: {
-        width: '100%',
-        height: '100%',
+        width: '70%',
+        height: '70%',
     },
-    logoOverlay: {
-        position: 'absolute',
-        bottom: 20,
-        right: 20,
-        backgroundColor: '#FFF',
-        borderRadius: 15,
-        padding: 2,
-    },
-    title: {
+    brandingText: {
         fontSize: 32,
-        fontWeight: 'bold',
-        color: COLORS.accent, // Dourado
-        marginBottom: 30,
-        fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+        fontWeight: '900',
+        color: COLORS.primary,
+        marginBottom: 4,
+        letterSpacing: -1,
     },
-    welcomeText: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: COLORS.primary, // Teal
+    subBrandingText: {
+        fontSize: 16,
+        color: COLORS.textSecondary,
+        fontWeight: '600',
+        textAlign: 'center',
+        opacity: 0.8,
     },
     formContainer: {
         width: '100%',
-        marginBottom: 40,
     },
-    inputContainer: {
+    card: {
+        backgroundColor: 'rgba(255, 255, 255, 0.85)',
+        borderRadius: 24,
+        padding: 24,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 20 },
+        shadowOpacity: 0.08,
+        shadowRadius: 30,
+        elevation: 10,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.5)',
+    },
+    inputWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
         backgroundColor: '#FFF',
-        borderRadius: 12,
+        borderRadius: 16,
         marginBottom: 16,
         paddingHorizontal: 16,
-        height: 56,
+        height: 60,
         borderWidth: 1,
-        borderColor: COLORS.inputBorder,
-        justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 1,
+        borderColor: '#E2E8F0',
+    },
+    inputIcon: {
+        marginRight: 12,
     },
     input: {
         flex: 1,
         color: COLORS.text,
         fontSize: 16,
+        fontWeight: '500',
     },
     eyeIcon: {
-        position: 'absolute',
-        right: 16,
+        padding: 4,
     },
-    button: {
-        backgroundColor: COLORS.primary, // Deep Teal
-        borderRadius: 12,
-        height: 56,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginTop: 8,
-        shadowColor: COLORS.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 4,
+    forgotPasswordButton: {
+        alignSelf: 'flex-end',
+        marginBottom: 24,
+        marginTop: -8,
     },
-    buttonText: {
-        color: '#FFF',
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-    footerButton: {
-        marginTop: 16,
-        alignItems: 'center',
-    },
-    footerText: {
-        color: COLORS.textSecondary,
+    forgotPasswordText: {
+        color: COLORS.primary,
         fontSize: 14,
+        fontWeight: '700',
     },
-    socialContainer: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        gap: 30,
-        marginTop: 20,
+    mainButton: {
+        height: 60,
+        borderRadius: 16,
     },
-    socialIcon: {
-        opacity: 0.6,
+    toggleButton: {
+        marginTop: 32,
+        alignItems: 'center',
+    },
+    toggleText: {
+        color: COLORS.textSecondary,
+        fontSize: 15,
+        fontWeight: '500',
+    },
+    toggleTextBold: {
+        color: COLORS.primary,
+        fontWeight: '800',
     }
 });
