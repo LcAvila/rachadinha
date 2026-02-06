@@ -274,3 +274,4 @@ export class AuthRepository implements IAuthRepository {
         await firebaseUpdatePassword(user, newPassword);
     }
 }
+
